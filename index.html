@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D HTML 游戏 Demo 合集 · Gemini 4 Carbon (High)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 25%, #1b3624 0%, #0b140e 75%);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      color: #f3efe6;
+      padding: 24px;
+    }
+    .card {
+      max-width: 640px;
+      width: 100%;
+      background: rgba(16, 26, 20, 0.9);
+      border: 1px solid rgba(251, 191, 36, 0.42);
+      border-radius: 18px;
+      padding: 34px 36px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fde68a;
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+    h1 {
+      font-size: 26px;
+      color: #fef3c7;
+      margin-bottom: 10px;
+    }
+    p {
+      font-size: 14.5px;
+      line-height: 1.7;
+      color: #d1fae5;
+      margin-bottom: 18px;
+    }
+    .features {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      font-size: 13.5px;
+      line-height: 1.75;
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .features b { color: #fcd34d; }
+    .play-btn {
+      display: inline-block;
+      width: 100%;
+      text-align: center;
+      text-decoration: none;
+      background: linear-gradient(90deg, #d97706, #f59e0b, #fbbf24);
+      color: #1c1917;
+      font-weight: 900;
+      font-size: 16px;
+      padding: 14px 24px;
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4);
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    .play-btn:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.08);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Three.js 3D Web Demo · Gemini 4 Carbon (High)</div>
+    <h1>⚔ 林间血战 · 剑盾怒气战斗 Demo</h1>
+    <p>
+      纯单文件 HTML + CDN Three.js 构建的 3D 森林动作战斗体验。扮演剑盾战士迎战半兽人战兵与半兽统领（BOSS），通过近身肉搏与弹反积蓄怒气点，自由切换远近战斗空间。
+    </p>
+    <div class="features">
+      • <b>怒气转化机制</b>：近战连斩 / 举盾精准弹反蓄满怒气槽 → 激活<b>怒气点（上限 3 点）</b><br/>
+      • <b>[1点] 破阵盾冲</b>：远→近高速举盾突进，打断眩晕敌人并获取吸收护盾<br/>
+      • <b>[2点] 连锁飞盾</b>：拉开距离掷出飞盾，先后追踪弹射撞击最多 2 名敌人后飞回手中<br/>
+      • <b>[3点] 怒焰旋风斩</b>：贴身化为可移动霸体剑刃风暴，高速横扫群敌并终结震击
+    </div>
+    <a class="play-btn" href="./forest_warrior_demo/">立即进入 3D 战斗 Demo →</a>
+  </div>
+</body>
+</html>

@@ -1,0 +1,3390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>林间血战 · 剑盾怒气战斗 Demo (Three.js 3D)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0d1710;
+      font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      color: #f3efe6;
+    }
+    #game-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+
+    /* Overlay Root */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Vignette & Damage Screen Flash */
+    #screen-fx {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 58%, rgba(6, 14, 9, 0.55) 100%);
+      transition: box-shadow 0.15s ease;
+      z-index: 5;
+    }
+    #screen-fx.hurt {
+      box-shadow: inset 0 0 90px rgba(220, 38, 38, 0.72);
+    }
+    #screen-fx.parry {
+      box-shadow: inset 0 0 80px rgba(251, 191, 36, 0.55);
+    }
+
+    /* Top Boss Bar */
+    #boss-hud {
+      position: absolute;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(470px, 48vw);
+      background: linear-gradient(180deg, rgba(18, 22, 19, 0.88), rgba(12, 15, 13, 0.78));
+      border: 1px solid rgba(217, 119, 6, 0.45);
+      border-radius: 10px;
+      padding: 10px 16px 12px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    #boss-hud.hidden {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-16px);
+    }
+    @media (max-width: 1160px) {
+      #boss-hud {
+        width: min(450px, 60vw);
+      }
+      #guide-panel {
+        top: 136px !important;
+      }
+    }
+    .boss-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .boss-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #fde68a;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+    }
+    .boss-sub {
+      font-size: 12px;
+      color: #fca5a5;
+      font-weight: 600;
+    }
+    .bar-track {
+      width: 100%;
+      height: 13px;
+      background: rgba(0, 0, 0, 0.65);
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      position: relative;
+    }
+    #boss-hp-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #991b1b, #ef4444, #f87171);
+      transition: width 0.12s ease-out;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+    }
+    .posture-track {
+      width: 100%;
+      height: 6px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 4px;
+      margin-top: 5px;
+      overflow: hidden;
+      border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+    #boss-posture-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #d97706, #fbbf24, #fef08a);
+      transition: width 0.1s ease-out;
+    }
+    #boss-state-tag {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #d6d3d1;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* Top Left Controls Guide */
+    #guide-panel {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      background: rgba(14, 22, 16, 0.78);
+      border: 1px solid rgba(167, 243, 208, 0.2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 12px;
+      line-height: 1.65;
+      color: #d1fae5;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      max-width: 275px;
+    }
+    #guide-panel h3 {
+      font-size: 13px;
+      color: #fcd34d;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .key-badge {
+      display: inline-block;
+      padding: 0px 5px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      margin-right: 3px;
+    }
+    .mechanic-tip {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255,255,255,0.15);
+      color: #fde68a;
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+
+    /* Top Right Sandbox Buttons */
+    #sandbox-bar {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      pointer-events: auto;
+      align-items: flex-end;
+    }
+    .sb-btn {
+      background: rgba(20, 32, 24, 0.85);
+      color: #ecfdf5;
+      border: 1px solid rgba(110, 231, 183, 0.35);
+      padding: 7px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      backdrop-filter: blur(5px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    .sb-btn:hover {
+      background: rgba(34, 58, 42, 0.95);
+      border-color: #fbbf24;
+      color: #fef08a;
+      transform: translateY(-1px);
+    }
+    .sb-btn:active {
+      transform: translateY(1px);
+    }
+    #enemy-counter {
+      font-size: 12px;
+      color: #a7f3d0;
+      background: rgba(12, 20, 15, 0.75);
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* Bottom Hero Combat HUD */
+    #player-hud {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(620px, 94vw);
+      background: linear-gradient(180deg, rgba(16, 24, 19, 0.88), rgba(10, 15, 12, 0.94));
+      border: 1px solid rgba(251, 191, 36, 0.35);
+      border-radius: 14px;
+      padding: 14px 18px;
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+    }
+
+    /* HP & Shield Row */
+    .vitals-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .vital-label {
+      font-size: 12px;
+      font-weight: 800;
+      color: #86efac;
+      min-width: 48px;
+    }
+    .hp-track {
+      flex: 1;
+      height: 15px;
+      background: rgba(0,0,0,0.65);
+      border-radius: 7px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    #hero-hp-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #15803d, #22c55e, #4ade80);
+      transition: width 0.12s ease-out;
+    }
+    #hero-barrier-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, rgba(56, 189, 248, 0.78), rgba(186, 230, 253, 0.9));
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
+      transition: width 0.1s ease-out;
+    }
+    #hp-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #fff;
+      text-shadow: 0 1px 3px #000;
+    }
+
+    /* Rage Bar + 3 Rage Points Row */
+    .rage-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.42);
+      border-radius: 10px;
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+    .rage-bar-wrap {
+      flex: 1;
+    }
+    .rage-bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      margin-bottom: 4px;
+      color: #fed7aa;
+      font-weight: 700;
+    }
+    .rage-track {
+      width: 100%;
+      height: 10px;
+      background: rgba(20, 12, 8, 0.85);
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid rgba(251, 146, 60, 0.32);
+    }
+    #rage-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #c2410c, #f97316, #facc15);
+      box-shadow: 0 0 10px rgba(249, 115, 22, 0.8);
+      transition: width 0.08s ease-out;
+    }
+
+    /* 3 Rage Point Crystals */
+    .rage-points-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rage-points-label {
+      font-size: 11.5px;
+      font-weight: 800;
+      color: #fde68a;
+      margin-right: 2px;
+    }
+    .rage-pip {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #292018 0%, #140f0b 100%);
+      border: 2px solid rgba(245, 158, 11, 0.35);
+      position: relative;
+      transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: rgba(255,255,255,0.2);
+      font-weight: 900;
+    }
+    .rage-pip.active {
+      background: radial-gradient(circle at 35% 35%, #fef08a 0%, #f59e0b 48%, #dc2626 100%);
+      border-color: #fef08a;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.95), 0 0 30px rgba(239, 68, 68, 0.65);
+      transform: scale(1.14);
+      color: #fff;
+      text-shadow: 0 1px 3px #7c2d12;
+    }
+
+    /* Skills Row */
+    .skills-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .skill-card {
+      position: relative;
+      background: rgba(24, 32, 27, 0.72);
+      border: 1.5px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      padding: 8px 10px;
+      cursor: pointer;
+      transition: all 0.16s ease;
+      opacity: 0.55;
+      filter: saturate(0.45);
+    }
+    .skill-card.ready {
+      opacity: 1;
+      filter: saturate(1);
+      background: linear-gradient(145deg, rgba(46, 35, 18, 0.88), rgba(24, 28, 22, 0.92));
+      border-color: #fbbf24;
+      box-shadow: 0 0 16px rgba(251, 191, 36, 0.32);
+    }
+    .skill-card.ready:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(251, 191, 36, 0.5);
+    }
+    .skill-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 3px;
+    }
+    .skill-key {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(251, 191, 36, 0.2);
+      border: 1px solid rgba(251, 191, 36, 0.55);
+      color: #fef08a;
+    }
+    .skill-cost {
+      font-size: 11px;
+      font-weight: 800;
+      color: #fb923c;
+    }
+    .skill-name {
+      font-size: 13px;
+      font-weight: 800;
+      color: #fffbeb;
+      margin-bottom: 2px;
+    }
+    .skill-desc {
+      font-size: 10.5px;
+      color: #cbd5e1;
+      line-height: 1.35;
+    }
+
+    /* Floating Combat Numbers & Enemy Bars */
+    #world-labels {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 8;
+    }
+    .float-text {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      font-weight: 900;
+      font-size: 17px;
+      text-shadow: 0 2px 5px rgba(0, 0, 0, 0.95);
+      white-space: nowrap;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+    .enemy-plate {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      width: 68px;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .enemy-plate-name {
+      font-size: 10px;
+      text-align: center;
+      color: #e2e8f0;
+      text-shadow: 0 1px 3px #000;
+      margin-bottom: 2px;
+      font-weight: 700;
+    }
+    .enemy-plate-bar {
+      width: 100%;
+      height: 6px;
+      background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .enemy-plate-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #dc2626, #f87171);
+    }
+
+    /* Center Banner Notification */
+    #center-banner {
+      position: absolute;
+      top: 24%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    #center-banner.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.04);
+    }
+    #center-banner .main-msg {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #fef08a;
+      text-shadow: 0 4px 16px rgba(0,0,0,0.95), 0 0 24px rgba(245, 158, 11, 0.7);
+    }
+    #center-banner .sub-msg {
+      margin-top: 6px;
+      font-size: 14px;
+      color: #f1f5f9;
+      text-shadow: 0 2px 6px #000;
+    }
+
+    /* Victory / Defeat Modal */
+    #result-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 12, 8, 0.72);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 25;
+      backdrop-filter: blur(5px);
+    }
+    #result-overlay.visible {
+      display: flex;
+    }
+    .result-box {
+      background: linear-gradient(180deg, rgba(22, 34, 26, 0.96), rgba(12, 18, 14, 0.98));
+      border: 2px solid #fbbf24;
+      border-radius: 16px;
+      padding: 28px 38px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+      max-width: 420px;
+    }
+    .result-title {
+      font-size: 30px;
+      font-weight: 900;
+      color: #fde68a;
+      margin-bottom: 10px;
+    }
+    .result-stats {
+      font-size: 14px;
+      color: #d1fae5;
+      line-height: 1.8;
+      margin-bottom: 20px;
+    }
+    .restart-btn {
+      background: linear-gradient(90deg, #d97706, #f59e0b);
+      color: #1c1917;
+      font-weight: 900;
+      font-size: 15px;
+      border: none;
+      padding: 10px 28px;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.5);
+    }
+    .restart-btn:hover {
+      filter: brightness(1.1);
+    }
+  </style>
+
+  <!-- Three.js via CDN ImportMap (Zero local library files) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="screen-fx"></div>
+  <div id="world-labels"></div>
+
+  <div id="hud">
+    <!-- Boss Health & Posture -->
+    <div id="boss-hud">
+      <div class="boss-header">
+        <span class="boss-title">☠ 半兽统领 · 碎颅者格罗姆 (BOSS)</span>
+        <span class="boss-sub" id="boss-hp-text">1800 / 1800</span>
+      </div>
+      <div class="bar-track">
+        <div id="boss-hp-fill"></div>
+      </div>
+      <div class="posture-track" title="架势条：满值时统领陷入破防眩晕">
+        <div id="boss-posture-fill"></div>
+      </div>
+      <div id="boss-state-tag">
+        <span id="boss-intent">状态：巡猎逼近</span>
+        <span>架势冲击槽（盾冲/弹反可快速击破）</span>
+      </div>
+    </div>
+
+    <!-- Left Combat & Space Rhythm Guide -->
+    <div id="guide-panel">
+      <h3>⚔ 剑盾战士 · 操作与空间节奏</h3>
+      <div><span class="key-badge">W A S D</span> 移动走位 &nbsp;<span class="key-badge">滚轮</span> 镜头缩放</div>
+      <div><span class="key-badge">左键 / J</span> 近身剑斩三连（<b>积攒怒气条</b>）</div>
+      <div><span class="key-badge">右键 / K</span> 举盾格挡（瞬间格挡=<b>精准弹反+巨量怒气</b>）</div>
+      <div><span class="key-badge">空格</span> 战术垫步闪避（拉开或切入距离）</div>
+      <div><span class="key-badge">1 / Q</span> 1点：破阵盾冲 &nbsp;<span class="key-badge">2 / E</span> 2点：连锁飞盾</div>
+      <div><span class="key-badge">3 / R</span> 3点：怒焰旋风斩</div>
+      <div class="mechanic-tip">
+        💡 <b>核心空间循环</b>：贴身挥剑/格挡蓄满怒气条 → 激活<b>怒气点(上限3)</b>。首领蓄力范围裂地时<b>远离</b>并用<b>[2点连锁飞盾]</b>远程弹射2敌；安全后用<b>[1点盾冲]</b>切入打断，或攒满释放<b>[3点旋风斩]</b>！
+      </div>
+    </div>
+
+    <!-- Top Right Encounter Sandbox Controls -->
+    <div id="sandbox-bar">
+      <div id="enemy-counter">存活敌军：0</div>
+      <button class="sb-btn" id="btn-reset">↻ 重置林间遭遇战</button>
+      <button class="sb-btn" id="btn-spawn-orcs">+ 增援 2 名半兽人</button>
+      <button class="sb-btn" id="btn-add-rage">⚡ 测试：+1 怒气点</button>
+    </div>
+
+    <!-- Center Dynamic Notification -->
+    <div id="center-banner">
+      <div class="main-msg" id="banner-main"></div>
+      <div class="sub-msg" id="banner-sub"></div>
+    </div>
+
+    <!-- Bottom Hero Vitals, Rage Bar -> Rage Points, and 3 Skills -->
+    <div id="player-hud">
+      <div class="vitals-row">
+        <span class="vital-label">生命护盾</span>
+        <div class="hp-track">
+          <div id="hero-hp-fill"></div>
+          <div id="hero-barrier-fill"></div>
+          <div id="hp-text">500 / 500</div>
+        </div>
+      </div>
+
+      <div class="rage-section">
+        <div class="rage-bar-wrap">
+          <div class="rage-bar-header">
+            <span>怒气积蓄槽（近战命中/格挡获取，不可直接使用，满槽转化 1 怒气点）</span>
+            <span id="rage-pct-text">0%</span>
+          </div>
+          <div class="rage-track">
+            <div id="rage-bar-fill"></div>
+          </div>
+        </div>
+
+        <div class="rage-points-wrap">
+          <span class="rage-points-label">怒气点</span>
+          <div class="rage-pip" id="pip-1">1</div>
+          <div class="rage-pip" id="pip-2">2</div>
+          <div class="rage-pip" id="pip-3">3</div>
+        </div>
+      </div>
+
+      <div class="skills-row">
+        <div class="skill-card" id="skill-1" data-slot="1">
+          <div class="skill-top">
+            <span class="skill-key">1 / Q</span>
+            <span class="skill-cost">● 消耗 1 怒气点</span>
+          </div>
+          <div class="skill-name">🛡 破阵盾冲（切入/控制）</div>
+          <div class="skill-desc">举盾高速突进撞击，眩晕打断敌军蓄力，并获得坚毅吸收护盾</div>
+        </div>
+
+        <div class="skill-card" id="skill-2" data-slot="2">
+          <div class="skill-top">
+            <span class="skill-key">2 / E</span>
+            <span class="skill-cost">●● 消耗 2 怒气点</span>
+          </div>
+          <div class="skill-name">⚡ 连锁飞盾（远程弹射）</div>
+          <div class="skill-desc">远距离掷出盾牌，先后追踪撞击最多 2 名敌人并减速，随后飞回手中</div>
+        </div>
+
+        <div class="skill-card" id="skill-3" data-slot="3">
+          <div class="skill-top">
+            <span class="skill-key">3 / R</span>
+            <span class="skill-cost">●●● 消耗 3 怒气点</span>
+          </div>
+          <div class="skill-name">🌪 怒焰旋风斩（近身爆发）</div>
+          <div class="skill-desc">化为可移动霸体剑刃风暴，持续高速切割周身群敌并终结震击</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Victory / Defeat Overlay -->
+  <div id="result-overlay">
+    <div class="result-box">
+      <div class="result-title" id="result-title">森林肃清！</div>
+      <div class="result-stats" id="result-stats"></div>
+      <button class="restart-btn" id="btn-play-again">再次挑战</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // =========================================================================
+    // 1. PROCEDURAL WEB AUDIO SYNTHESIZER (Zero external audio dependencies)
+    // =========================================================================
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+      }
+      init() {
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      tone(freqStart, freqEnd, duration, type = 'triangle', gainVal = 0.16, delay = 0) {
+        if (!this.ctx) return;
+        const t0 = this.ctx.currentTime + delay;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freqStart, t0);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t0 + duration);
+        gain.gain.setValueAtTime(gainVal, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+        osc.connect(gain).connect(this.ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + duration + 0.02);
+      }
+      noise(duration, filterFreq = 900, gainVal = 0.14, delay = 0) {
+        if (!this.ctx) return;
+        const t0 = this.ctx.currentTime + delay;
+        const len = Math.floor(this.ctx.sampleRate * duration);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 1.5);
+        }
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(filterFreq, t0);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(gainVal, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+        src.connect(filter).connect(gain).connect(this.ctx.destination);
+        src.start(t0);
+      }
+      swing(comboIdx = 0) {
+        this.noise(0.14, 700 + comboIdx * 220, 0.14);
+        this.tone(240 + comboIdx * 45, 95, 0.12, 'sawtooth', 0.07);
+      }
+      meleeHit(heavy = false) {
+        this.tone(heavy ? 155 : 190, 48, heavy ? 0.2 : 0.12, 'triangle', heavy ? 0.24 : 0.16);
+        this.noise(heavy ? 0.16 : 0.09, heavy ? 520 : 1100, heavy ? 0.2 : 0.12);
+      }
+      block(perfect = false) {
+        if (perfect) {
+          this.tone(660, 1320, 0.28, 'sine', 0.22);
+          this.tone(990, 880, 0.34, 'triangle', 0.16, 0.03);
+          this.noise(0.15, 2200, 0.18);
+        } else {
+          this.tone(360, 180, 0.14, 'square', 0.13);
+          this.noise(0.1, 1400, 0.14);
+        }
+      }
+      ragePointUp(count) {
+        const base = 440 * Math.pow(1.12, count);
+        this.tone(base, base * 1.5, 0.25, 'triangle', 0.2);
+        this.tone(base * 1.5, base * 2, 0.3, 'sine', 0.18, 0.06);
+      }
+      shieldCharge() {
+        this.noise(0.26, 650, 0.22);
+        this.tone(180, 380, 0.18, 'sawtooth', 0.16);
+      }
+      shieldSlam() {
+        this.tone(130, 40, 0.28, 'sawtooth', 0.28);
+        this.tone(520, 260, 0.18, 'triangle', 0.18);
+        this.noise(0.22, 480, 0.24);
+      }
+      shieldThrowLaunch() {
+        this.tone(320, 680, 0.18, 'sine', 0.16);
+        this.noise(0.15, 1600, 0.12);
+      }
+      shieldBounce(bounceNum) {
+        const pitch = bounceNum === 1 ? 580 : 780;
+        this.tone(pitch, pitch * 1.35, 0.2, 'triangle', 0.24);
+        this.tone(pitch * 0.5, 110, 0.16, 'sawtooth', 0.16);
+        this.noise(0.12, 2000, 0.18);
+      }
+      shieldCatch() {
+        this.tone(420, 620, 0.1, 'sine', 0.14);
+      }
+      whirlwindTick(finalHit = false) {
+        if (finalHit) {
+          this.tone(210, 52, 0.36, 'sawtooth', 0.3);
+          this.noise(0.32, 700, 0.26);
+        } else {
+          this.noise(0.12, 1150, 0.12);
+          this.tone(300, 140, 0.1, 'sawtooth', 0.08);
+        }
+      }
+      bossRoar() {
+        this.tone(115, 58, 0.55, 'sawtooth', 0.24);
+        this.noise(0.45, 320, 0.2);
+      }
+      earthshakerBoom() {
+        this.tone(95, 28, 0.52, 'sawtooth', 0.34);
+        this.noise(0.48, 280, 0.32);
+      }
+    }
+    const sfx = new SoundFX();
+
+    // =========================================================================
+    // 2. THREE.JS SCENE, CAMERA & RENDERER SETUP
+    // =========================================================================
+    const canvas = document.getElementById('game-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x132419);
+    scene.fog = new THREE.FogExp2(0x16291c, 0.0175);
+
+    const camera = new THREE.PerspectiveCamera(44, window.innerWidth / window.innerHeight, 0.5, 130);
+    let camZoom = 18.5; // Adjustable via scroll wheel (12 to 26)
+    const camCurrentLook = new THREE.Vector3(0, 0.8, 0);
+
+    // Lighting: Sunlit Forest Glade
+    const hemiLight = new THREE.HemisphereLight(0xbbe8d1, 0x1e2f1d, 0.95);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffe6b3, 2.2);
+    sunLight.position.set(18, 30, 16);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.camera.near = 4;
+    sunLight.shadow.camera.far = 75;
+    const d = 28;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    const rimLight = new THREE.DirectionalLight(0x6ee7b7, 0.55);
+    rimLight.position.set(-20, 14, -18);
+    scene.add(rimLight);
+
+    // Dynamic Action Point Light (flashes on skills/impacts)
+    const actionLight = new THREE.PointLight(0xffaa33, 0, 14);
+    scene.add(actionLight);
+
+    // =========================================================================
+    // 3. FOREST ENVIRONMENT & CLEARING OBSTACLES
+    // =========================================================================
+    const ARENA_RADIUS = 19.5;
+    const obstacles = []; // { x, z, r }
+
+    function createForestTexture() {
+      const c = document.createElement('canvas');
+      c.width = 1024;
+      c.height = 1024;
+      const ctx = c.getContext('2d');
+
+      // Base mossy forest soil
+      ctx.fillStyle = '#243b24';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Dappled moss & forest floor patches
+      for (let i = 0; i < 2400; i++) {
+        const x = Math.random() * 1024;
+        const y = Math.random() * 1024;
+        const r = 6 + Math.random() * 28;
+        const greens = ['rgba(46,79,40,0.32)', 'rgba(30,54,29,0.36)', 'rgba(65,98,46,0.22)', 'rgba(58,48,34,0.25)'];
+        ctx.fillStyle = greens[i % greens.length];
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Battle clearing dirt path ring in center
+      const grad = ctx.createRadialGradient(512, 512, 40, 512, 512, 340);
+      grad.addColorStop(0, 'rgba(76, 64, 46, 0.52)');
+      grad.addColorStop(0.65, 'rgba(62, 56, 40, 0.32)');
+      grad.addColorStop(0.92, 'rgba(84, 76, 56, 0.42)');
+      grad.addColorStop(1, 'rgba(36, 59, 36, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Subtle pebbles & fallen needles
+      for (let i = 0; i < 3500; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(130,122,102,0.22)' : 'rgba(22,36,20,0.35)';
+        ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2.5, 2.5);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    function buildForestEnvironment() {
+      // Ground Plane
+      const groundGeo = new THREE.CircleGeometry(68, 72);
+      const groundMat = new THREE.MeshStandardMaterial({
+        map: createForestTexture(),
+        roughness: 0.92,
+        metalness: 0.04
+      });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Subtle Ancient Forest Stone Ring Marking Arena Boundary
+      const stoneMat = new THREE.MeshStandardMaterial({ color: 0x5c645b, roughness: 0.88, flatShading: true });
+      const mossMat = new THREE.MeshStandardMaterial({ color: 0x355e34, roughness: 0.92, flatShading: true });
+      const ringCount = 24;
+      for (let i = 0; i < ringCount; i++) {
+        const ang = (i / ringCount) * Math.PI * 2;
+        const r = ARENA_RADIUS + 0.9 + (Math.sin(i * 3.7) * 0.35);
+        const slab = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65 + (i % 3) * 0.22, 0), stoneMat);
+        slab.position.set(Math.cos(ang) * r, 0.15, Math.sin(ang) * r);
+        slab.scale.set(1.4, 0.42, 1.1);
+        slab.rotation.y = ang + 0.4;
+        slab.receiveShadow = true;
+        slab.castShadow = true;
+        scene.add(slab);
+      }
+
+      // 3 Scenic Boulders / Fallen Stumps inside outer clearing for spatial depth
+      const coverSpots = [
+        { x: -11.5, z: -8.5, r: 1.25, type: 'rock' },
+        { x: 12.5, z: -6.5, r: 1.15, type: 'stump' },
+        { x: -9.5, z: 10.5, r: 1.2, type: 'rock' }
+      ];
+      const trunkBarkMat = new THREE.MeshStandardMaterial({ color: 0x4a3525, roughness: 0.9, flatShading: true });
+      coverSpots.forEach((spot) => {
+        obstacles.push({ x: spot.x, z: spot.z, r: spot.r });
+        if (spot.type === 'rock') {
+          const rockGrp = new THREE.Group();
+          const rMain = new THREE.Mesh(new THREE.DodecahedronGeometry(spot.r, 1), stoneMat);
+          rMain.scale.set(1.15, 0.78, 1.0);
+          rMain.position.y = spot.r * 0.45;
+          rMain.castShadow = true;
+          rMain.receiveShadow = true;
+          const mossCap = new THREE.Mesh(new THREE.DodecahedronGeometry(spot.r * 0.85, 1), mossMat);
+          mossCap.scale.set(1.05, 0.45, 0.95);
+          mossCap.position.set(0.1, spot.r * 0.72, 0);
+          rockGrp.add(rMain, mossCap);
+          rockGrp.position.set(spot.x, 0, spot.z);
+          scene.add(rockGrp);
+        } else {
+          const stumpGrp = new THREE.Group();
+          const stump = new THREE.Mesh(new THREE.CylinderGeometry(spot.r * 0.82, spot.r * 1.08, 1.15, 9), trunkBarkMat);
+          stump.position.y = 0.57;
+          stump.castShadow = true;
+          stump.receiveShadow = true;
+          const topRing = new THREE.Mesh(new THREE.CylinderGeometry(spot.r * 0.76, spot.r * 0.76, 0.06, 9),
+            new THREE.MeshStandardMaterial({ color: 0x9c7a54, roughness: 0.85 }));
+          topRing.position.y = 1.14;
+          stumpGrp.add(stump, topRing);
+          stumpGrp.position.set(spot.x, 0, spot.z);
+          scene.add(stumpGrp);
+        }
+      });
+
+      // Forest Trees surrounding & framing the clearing (Pine + Broadleaf Oak)
+      const foliageMats = [
+        new THREE.MeshStandardMaterial({ color: 0x1d4723, roughness: 0.85, flatShading: true }),
+        new THREE.MeshStandardMaterial({ color: 0x27592b, roughness: 0.85, flatShading: true }),
+        new THREE.MeshStandardMaterial({ color: 0x183a1e, roughness: 0.88, flatShading: true }),
+        new THREE.MeshStandardMaterial({ color: 0x336931, roughness: 0.84, flatShading: true })
+      ];
+
+      function makeForestTree(scale, isOak, matIdx, castShadow) {
+        const tree = new THREE.Group();
+        const fMat = foliageMats[matIdx % foliageMats.length];
+        if (!isOak) {
+          const trunkH = 3.8 * scale;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * scale, 0.48 * scale, trunkH, 7), trunkBarkMat);
+          trunk.position.y = trunkH / 2;
+          trunk.castShadow = castShadow;
+          trunk.receiveShadow = true;
+          tree.add(trunk);
+
+          for (let tier = 0; tier < 4; tier++) {
+            const coneR = (2.35 - tier * 0.42) * scale;
+            const coneH = (2.75 - tier * 0.3) * scale;
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(coneR, coneH, 7), fMat);
+            cone.position.y = trunkH * 0.56 + tier * (1.36 * scale);
+            cone.rotation.y = tier * 0.6;
+            cone.castShadow = castShadow;
+            cone.receiveShadow = true;
+            tree.add(cone);
+          }
+        } else {
+          const trunkH = 3.3 * scale;
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * scale, 0.58 * scale, trunkH, 7), trunkBarkMat);
+          trunk.position.y = trunkH / 2;
+          trunk.castShadow = castShadow;
+          tree.add(trunk);
+
+          const offsets = [
+            [0, trunkH + 1.2 * scale, 0, 2.05 * scale],
+            [-1.05 * scale, trunkH + 0.65 * scale, 0.6 * scale, 1.5 * scale],
+            [1.05 * scale, trunkH + 0.75 * scale, -0.5 * scale, 1.55 * scale],
+            [0.2 * scale, trunkH + 0.55 * scale, -1.05 * scale, 1.4 * scale]
+          ];
+          offsets.forEach(([ox, oy, oz, cr]) => {
+            const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(cr, 1), fMat);
+            crown.position.set(ox, oy, oz);
+            crown.castShadow = castShadow;
+            tree.add(crown);
+          });
+        }
+        return tree;
+      }
+
+      // 5 Heroic Landmark Trees right inside the northern/side glade edge (with trunk collision)
+      const gladeTrees = [
+        { x: -12.8, z: -11.2, s: 1.12, oak: false },
+        { x: 13.2, z: -10.8, s: 1.18, oak: true },
+        { x: -15.6, z: -1.8, s: 1.05, oak: true },
+        { x: 15.8, z: -1.2, s: 1.1, oak: false },
+        { x: 0.4, z: -15.8, s: 1.22, oak: false }
+      ];
+      gladeTrees.forEach((gt, idx) => {
+        obstacles.push({ x: gt.x, z: gt.z, r: 0.72 });
+        const t = makeForestTree(gt.s, gt.oak, idx, true);
+        t.position.set(gt.x, 0, gt.z);
+        scene.add(t);
+      });
+
+      const totalTrees = 96;
+      for (let i = 0; i < totalTrees; i++) {
+        const layer = i < 42 ? 0 : 1;
+        const baseAng = (i / (layer === 0 ? 42 : 54)) * Math.PI * 2 + (Math.random() - 0.5) * 0.14;
+        // Keep southern (+Z) camera sightline open while framing N/E/W tightly with forest trees
+        const southFactor = Math.sin(baseAng);
+        const minR = layer === 0 ? (southFactor > 0.38 ? 25.5 : 20.2) : 28.5;
+        const maxR = layer === 0 ? (southFactor > 0.38 ? 30.0 : 25.5) : 52.0;
+        const radius = minR + Math.random() * (maxR - minR);
+
+        const tx = Math.cos(baseAng) * radius;
+        const tz = Math.sin(baseAng) * radius;
+        const scale = (layer === 0 ? 0.95 : 1.18) + Math.random() * 0.5;
+        const tree = makeForestTree(scale, i % 3 === 0, i, layer === 0);
+        tree.position.set(tx, 0, tz);
+        scene.add(tree);
+      }
+
+      // Glowing Forest Mushrooms around perimeter for atmosphere
+      const capMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0ea5e9,
+        emissiveIntensity: 0.7,
+        roughness: 0.4
+      });
+      const stemMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.8 });
+      for (let i = 0; i < 18; i++) {
+        const ang = (i / 18) * Math.PI * 2 + 0.2;
+        const r = ARENA_RADIUS + 1.5 + (i % 3) * 0.8;
+        const cluster = new THREE.Group();
+        for (let m = 0; m < 3; m++) {
+          const s = 0.6 + m * 0.25;
+          const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * s, 0.06 * s, 0.24 * s, 6), stemMat);
+          stem.position.set((m - 1) * 0.18, 0.12 * s, (m % 2) * 0.12);
+          const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16 * s, 0.14 * s, 7), capMat);
+          cap.position.set(stem.position.x, 0.26 * s, stem.position.z);
+          cluster.add(stem, cap);
+        }
+        cluster.position.set(Math.cos(ang) * r, 0, Math.sin(ang) * r);
+        scene.add(cluster);
+      }
+
+      // Instanced Grass Tufts inside & around clearing
+      const grassGeo = new THREE.ConeGeometry(0.08, 0.48, 4);
+      grassGeo.translate(0, 0.24, 0);
+      const grassMat = new THREE.MeshStandardMaterial({ color: 0x3b6e35, roughness: 0.85 });
+      const grassCount = 520;
+      const grassInst = new THREE.InstancedMesh(grassGeo, grassMat, grassCount);
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < grassCount; i++) {
+        const r = 3.5 + Math.sqrt(Math.random()) * 25;
+        const a = Math.random() * Math.PI * 2;
+        dummy.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+        dummy.rotation.set((Math.random() - 0.5) * 0.3, Math.random() * Math.PI, (Math.random() - 0.5) * 0.3);
+        const s = 0.65 + Math.random() * 0.85;
+        dummy.scale.set(s, s * (0.8 + Math.random() * 0.6), s);
+        dummy.updateMatrix();
+        grassInst.setMatrixAt(i, dummy.matrix);
+      }
+      scene.add(grassInst);
+
+      // Slanted Sunbeam Shafts in Upper Canopy
+      const beamGeo = new THREE.CylinderGeometry(1.2, 3.6, 26, 12, 1, true);
+      const beamMat = new THREE.MeshBasicMaterial({
+        color: 0xfff3c4,
+        transparent: true,
+        opacity: 0.042,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      });
+      const beamPositions = [[-14, 12, -14], [10, 12, -12], [-4, 12, 8], [15, 12, 6]];
+      beamPositions.forEach(([bx, by, bz]) => {
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.set(bx, by, bz);
+        beam.rotation.z = -0.32;
+        beam.rotation.x = 0.22;
+        scene.add(beam);
+      });
+    }
+    buildForestEnvironment();
+
+    // Floating Forest Firefly / Pollen Motes
+    const moteCount = 120;
+    const moteGeo = new THREE.BufferGeometry();
+    const motePos = new Float32Array(moteCount * 3);
+    for (let i = 0; i < moteCount; i++) {
+      motePos[i * 3] = (Math.random() - 0.5) * 46;
+      motePos[i * 3 + 1] = 0.6 + Math.random() * 7.5;
+      motePos[i * 3 + 2] = (Math.random() - 0.5) * 46;
+    }
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+    const moteMat = new THREE.PointsMaterial({
+      color: 0xfef08a,
+      size: 0.16,
+      transparent: true,
+      opacity: 0.68,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    const forestMotes = new THREE.Points(moteGeo, moteMat);
+    scene.add(forestMotes);
+
+    // Subtle Ground Aim Indicator
+    const aimReticle = new THREE.Group();
+    const aimRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.32, 0.44, 24),
+      new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide, transparent: true, opacity: 0.65 })
+    );
+    aimRing.rotation.x = -Math.PI / 2;
+    aimRing.position.y = 0.04;
+    aimReticle.add(aimRing);
+    scene.add(aimReticle);
+
+    // =========================================================================
+    // 4. CHARACTER MODELS: SWORD & SHIELD WARRIOR + ORCS + ORC CHIEFTAIN BOSS
+    // =========================================================================
+    function createShieldVisual() {
+      const shield = new THREE.Group();
+      const steelRimMat = new THREE.MeshStandardMaterial({ color: 0xdbe4ee, metalness: 0.78, roughness: 0.25 });
+      const royalBlueMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, metalness: 0.35, roughness: 0.45 });
+      const goldCrestMat = new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        emissive: 0xb45309,
+        emissiveIntensity: 0.35,
+        metalness: 0.75,
+        roughness: 0.22
+      });
+
+      // Heater shield main plate + lower point
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.88, 0.09), steelRimMat);
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.76, 0.105), royalBlueMat);
+      const lowerTip = new THREE.Mesh(new THREE.ConeGeometry(0.39, 0.38, 4), steelRimMat);
+      lowerTip.rotation.z = Math.PI;
+      lowerTip.rotation.y = Math.PI / 4;
+      lowerTip.scale.set(1, 1, 0.22);
+      lowerTip.position.y = -0.56;
+
+      // Golden Sun/Lion Boss Emblem in center
+      const bossEmblem = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), goldCrestMat);
+      bossEmblem.scale.set(1, 1.25, 0.45);
+      bossEmblem.position.z = 0.06;
+
+      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.68, 0.115), goldCrestMat);
+      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.09, 0.115), goldCrestMat);
+
+      shield.add(plate, face, lowerTip, crossV, crossH, bossEmblem);
+      shield.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+      return { shield, goldCrestMat };
+    }
+
+    function buildHeroModel() {
+      const root = new THREE.Group();
+      const spinRig = new THREE.Group(); // Spins independently during Whirlwind
+      root.add(spinRig);
+
+      const armorMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.75, roughness: 0.28 });
+      const darkSteelMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6, roughness: 0.45 });
+      const tabardMat = new THREE.MeshStandardMaterial({ color: 0x1e40af, roughness: 0.65 });
+      const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.7, roughness: 0.25 });
+      const plumeMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.55 });
+      const bladeMat = new THREE.MeshStandardMaterial({
+        color: 0xf1f5f9,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0.0,
+        metalness: 0.85,
+        roughness: 0.18
+      });
+
+      // Legs
+      const leftLeg = new THREE.Group();
+      leftLeg.position.set(-0.22, 0.75, 0);
+      const lGreave = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.75, 0.26), armorMat);
+      lGreave.position.y = -0.37;
+      leftLeg.add(lGreave);
+
+      const rightLeg = new THREE.Group();
+      rightLeg.position.set(0.22, 0.75, 0);
+      const rGreave = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.75, 0.26), armorMat);
+      rGreave.position.y = -0.37;
+      rightLeg.add(rGreave);
+
+      // Torso & Tabard
+      const bodyPivot = new THREE.Group();
+      bodyPivot.position.y = 0.78;
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.86, 0.46), armorMat);
+      chest.position.y = 0.43;
+      const tabard = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.92, 0.49), tabardMat);
+      tabard.position.y = 0.36;
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.13, 0.51), goldMat);
+      belt.position.y = 0.08;
+      bodyPivot.add(chest, tabard, belt);
+
+      // Pauldrons
+      const lPauldron = new THREE.Mesh(new THREE.DodecahedronGeometry(0.27, 0), armorMat);
+      lPauldron.position.set(-0.5, 0.78, 0);
+      lPauldron.scale.set(1.1, 0.85, 1.15);
+      const rPauldron = lPauldron.clone();
+      rPauldron.position.x = 0.5;
+      bodyPivot.add(lPauldron, rPauldron);
+
+      // Knight Greathelm & Plume
+      const head = new THREE.Group();
+      head.position.y = 1.08;
+      const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.28, 0.46, 8), armorMat);
+      helm.position.y = 0.12;
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.16),
+        new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+      visor.position.set(0, 0.14, 0.21);
+      const plume = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.58, 6), plumeMat);
+      plume.rotation.x = -Math.PI * 0.36;
+      plume.position.set(0, 0.36, -0.22);
+      head.add(helm, visor, plume);
+      bodyPivot.add(head);
+
+      // Right Arm + Broadsword (Hero faces +Z locally)
+      const rightArm = new THREE.Group();
+      rightArm.position.set(-0.52, 0.72, 0); // Viewer perspective: -X is character's right hand when facing +Z
+      const rArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.58, 0.22), darkSteelMat);
+      rArmMesh.position.set(0, -0.22, 0.12);
+      rArmMesh.rotation.x = -0.5;
+      rightArm.add(rArmMesh);
+
+      const swordPivot = new THREE.Group();
+      swordPivot.position.set(0, -0.4, 0.3);
+      const hilt = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.32, 6), darkSteelMat);
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.11), goldMat);
+      guard.position.y = 0.16;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.38, 0.045), bladeMat);
+      blade.position.y = 0.86;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.092, 0.26, 4), bladeMat);
+      tip.rotation.y = Math.PI / 4;
+      tip.scale.set(1, 1, 0.38);
+      tip.position.y = 1.66;
+      swordPivot.add(hilt, guard, blade, tip);
+      swordPivot.rotation.x = Math.PI * 0.38;
+      rightArm.add(swordPivot);
+      bodyPivot.add(rightArm);
+
+      // Left Arm + Kite Shield (+X is character's left hand when facing +Z)
+      const leftArm = new THREE.Group();
+      leftArm.position.set(0.52, 0.72, 0);
+      const lArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.56, 0.22), darkSteelMat);
+      lArmMesh.position.set(0, -0.2, 0.14);
+      lArmMesh.rotation.x = -0.6;
+      leftArm.add(lArmMesh);
+
+      const { shield: heldShield, goldCrestMat } = createShieldVisual();
+      heldShield.position.set(0.14, -0.22, 0.38);
+      heldShield.rotation.y = 0.32;
+      leftArm.add(heldShield);
+      bodyPivot.add(leftArm);
+
+      // 3 Floating Rage Orbs behind warrior's shoulders to visualize stored Rage Points in 3D!
+      const rageOrbs = [];
+      for (let i = 0; i < 3; i++) {
+        const orbMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0 });
+        const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.13, 0), orbMat);
+        bodyPivot.add(orb);
+        rageOrbs.push({ mesh: orb, mat: orbMat });
+      }
+
+      // Valor Absorb Shield Sphere (visible when Barrier > 0)
+      const barrierMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.0,
+        wireframe: true
+      });
+      const barrierSphere = new THREE.Mesh(new THREE.IcosahedronGeometry(1.25, 1), barrierMat);
+      barrierSphere.position.y = 1.1;
+      root.add(barrierSphere);
+
+      // Block Frontal Energy Ward (visible while holding Right-Click Block)
+      const blockWardMat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const blockWard = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.15, 1.15, 1.45, 16, 1, true, -Math.PI * 0.32, Math.PI * 0.64),
+        blockWardMat
+      );
+      blockWard.position.y = 1.05;
+      spinRig.add(blockWard);
+
+      // Whirlwind Tornado Mesh (visible during Skill 3: 3 sleek swirling crescent blades)
+      const wwGroup = new THREE.Group();
+      wwGroup.visible = false;
+      const wwOuterMat = new THREE.MeshBasicMaterial({
+        color: 0xf97316,
+        transparent: true,
+        opacity: 0.22,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const wwBladeMat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        transparent: true,
+        opacity: 0.65,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const wwPerimeter = new THREE.Mesh(new THREE.RingGeometry(3.75, 4.2, 40), wwOuterMat);
+      wwPerimeter.rotation.x = -Math.PI / 2;
+      wwPerimeter.position.y = 0.2;
+      wwGroup.add(wwPerimeter);
+      for (let b = 0; b < 3; b++) {
+        const arc = new THREE.Mesh(
+          new THREE.RingGeometry(2.1, 4.15, 18, 1, (b * Math.PI * 2) / 3, Math.PI * 0.44),
+          wwBladeMat
+        );
+        arc.rotation.x = -Math.PI / 2;
+        arc.position.y = 0.85 + (b % 2) * 0.22;
+        wwGroup.add(arc);
+      }
+      root.add(wwGroup);
+
+      spinRig.add(leftLeg, rightLeg, bodyPivot);
+      root.traverse((c) => { if (c.isMesh && c !== barrierSphere && c !== blockWard) c.castShadow = true; });
+      scene.add(root);
+
+      return {
+        root, spinRig, bodyPivot, head, leftLeg, rightLeg,
+        rightArm, leftArm, swordPivot, heldShield,
+        bladeMat, goldCrestMat, rageOrbs, barrierSphere, barrierMat,
+        blockWard, blockWardMat, wwGroup
+      };
+    }
+
+    function buildOrcModel(isBoss = false) {
+      const scale = isBoss ? 1.66 : 1.0;
+      const root = new THREE.Group();
+      const bodyWrap = new THREE.Group();
+      root.add(bodyWrap);
+
+      // Independent materials per enemy so hit-flash doesn't bleed across enemies
+      const skinMat = new THREE.MeshStandardMaterial({
+        color: isBoss ? 0x395828 : 0x4d7c32,
+        roughness: 0.72
+      });
+      const armorMat = new THREE.MeshStandardMaterial({
+        color: isBoss ? 0x1e2024 : 0x57412d,
+        metalness: isBoss ? 0.68 : 0.25,
+        roughness: isBoss ? 0.35 : 0.8
+      });
+      const accentMat = new THREE.MeshStandardMaterial({
+        color: isBoss ? 0xb91c1c : 0x78716c,
+        metalness: 0.45,
+        roughness: 0.5
+      });
+      const boneMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.55 });
+      const weaponSteelMat = new THREE.MeshStandardMaterial({
+        color: isBoss ? 0xd1d5db : 0x9ca3af,
+        emissive: isBoss ? 0x991b1b : 0x000000,
+        emissiveIntensity: isBoss ? 0.35 : 0,
+        metalness: 0.78,
+        roughness: 0.28
+      });
+
+      // Legs
+      const leftLeg = new THREE.Group();
+      leftLeg.position.set(-0.24 * scale, 0.72 * scale, 0);
+      const lBoot = new THREE.Mesh(new THREE.BoxGeometry(0.28 * scale, 0.72 * scale, 0.3 * scale), armorMat);
+      lBoot.position.y = -0.36 * scale;
+      leftLeg.add(lBoot);
+
+      const rightLeg = new THREE.Group();
+      rightLeg.position.set(0.24 * scale, 0.72 * scale, 0);
+      const rBoot = lBoot.clone();
+      rightLeg.add(rBoot);
+
+      // Muscular hunched torso
+      const torso = new THREE.Group();
+      torso.position.y = 0.74 * scale;
+      const chest = new THREE.Mesh(new THREE.BoxGeometry(0.88 * scale, 0.92 * scale, 0.56 * scale), skinMat);
+      chest.position.y = 0.46 * scale;
+      chest.rotation.x = 0.12;
+      torso.add(chest);
+
+      const harness = new THREE.Mesh(new THREE.BoxGeometry(0.92 * scale, 0.48 * scale, 0.6 * scale), armorMat);
+      harness.position.y = 0.28 * scale;
+      torso.add(harness);
+
+      if (isBoss) {
+        // Warlord Crimson Cape + Horned Skull Pauldrons
+        const cape = new THREE.Mesh(new THREE.BoxGeometry(0.82 * scale, 1.05 * scale, 0.08 * scale), accentMat);
+        cape.position.set(0, 0.36 * scale, -0.32 * scale);
+        cape.rotation.x = 0.16;
+        torso.add(cape);
+
+        [-1, 1].forEach((side) => {
+          const pauldron = new THREE.Mesh(new THREE.DodecahedronGeometry(0.34 * scale, 0), armorMat);
+          pauldron.position.set(side * 0.58 * scale, 0.84 * scale, 0);
+          const horn = new THREE.Mesh(new THREE.ConeGeometry(0.11 * scale, 0.48 * scale, 6), boneMat);
+          horn.position.set(side * 0.72 * scale, 1.12 * scale, 0.05 * scale);
+          horn.rotation.z = -side * 0.55;
+          torso.add(pauldron, horn);
+        });
+      } else {
+        // Single Iron Spiked Shoulderpad on Grunt
+        const pauldron = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28 * scale, 0), accentMat);
+        pauldron.position.set(-0.52 * scale, 0.8 * scale, 0);
+        torso.add(pauldron);
+      }
+
+      // Orc Head, Glowing Eyes & Tusks
+      const head = new THREE.Group();
+      head.position.set(0, 1.05 * scale, 0.12 * scale);
+      const skull = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.48 * scale, 0.5 * scale), skinMat);
+      skull.position.y = 0.16 * scale;
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.54 * scale, 0.2 * scale, 0.54 * scale),
+        isBoss ? armorMat : skinMat);
+      jaw.position.set(0, 0.02 * scale, 0.04 * scale);
+
+      const eyeMat = new THREE.MeshBasicMaterial({ color: isBoss ? 0xff2222 : 0xfbbf24 });
+      [-1, 1].forEach((s) => {
+        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.06 * scale, 0.06 * scale), eyeMat);
+        eye.position.set(s * 0.13 * scale, 0.22 * scale, 0.25 * scale);
+        const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.045 * scale, 0.2 * scale, 5), boneMat);
+        tusk.position.set(s * 0.17 * scale, 0.12 * scale, 0.31 * scale);
+        tusk.rotation.x = 0.25;
+        head.add(eye, tusk);
+      });
+
+      if (isBoss) {
+        // Iron War-Crown
+        const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * scale, 0.3 * scale, 0.16 * scale, 7), accentMat);
+        crown.position.y = 0.42 * scale;
+        head.add(crown);
+      }
+      head.add(skull, jaw);
+      torso.add(head);
+
+      // Weapon Arm (Right Arm at -X)
+      const rightArm = new THREE.Group();
+      rightArm.position.set(-0.56 * scale, 0.78 * scale, 0);
+      const rBicep = new THREE.Mesh(new THREE.BoxGeometry(0.28 * scale, 0.66 * scale, 0.28 * scale), skinMat);
+      rBicep.position.set(0, -0.26 * scale, 0.12 * scale);
+      rBicep.rotation.x = -0.45;
+      rightArm.add(rBicep);
+
+      const weaponGrp = new THREE.Group();
+      weaponGrp.position.set(0, -0.48 * scale, 0.32 * scale);
+      if (isBoss) {
+        // Colossal Double-Bladed Gore-Greataxe
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.055 * scale, 0.055 * scale, 1.85 * scale, 7), armorMat);
+        shaft.position.y = 0.55 * scale;
+        const axeHead = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 0.68 * scale, 0.92 * scale), weaponSteelMat);
+        axeHead.position.y = 1.18 * scale;
+        const topSpike = new THREE.Mesh(new THREE.ConeGeometry(0.08 * scale, 0.34 * scale, 5), weaponSteelMat);
+        topSpike.position.y = 1.62 * scale;
+        weaponGrp.add(shaft, axeHead, topSpike);
+      } else {
+        // Jagged Orc Cleaver
+        const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.45, 6), armorMat);
+        const cleaver = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.05, 0.32), weaponSteelMat);
+        cleaver.position.set(0, 0.62, 0.06);
+        weaponGrp.add(handle, cleaver);
+      }
+      weaponGrp.rotation.x = Math.PI * 0.36;
+      rightArm.add(weaponGrp);
+      torso.add(rightArm);
+
+      // Left Off-hand Arm
+      const leftArm = new THREE.Group();
+      leftArm.position.set(0.56 * scale, 0.78 * scale, 0);
+      const lBicep = rBicep.clone();
+      leftArm.add(lBicep);
+      torso.add(leftArm);
+
+      bodyWrap.add(leftLeg, rightLeg, torso);
+      root.traverse((c) => { if (c.isMesh) c.castShadow = true; });
+      scene.add(root);
+
+      return {
+        root, bodyWrap, torso, leftLeg, rightLeg, rightArm, leftArm, weaponGrp,
+        flashMats: [skinMat, armorMat, accentMat]
+      };
+    }
+
+    // =========================================================================
+    // 5. TRANSIENT VISUAL EFFECTS, TELEGRAPHS, FLOATING LABELS & SLASH ARCS
+    // =========================================================================
+    const vfxList = [];
+    const floatLabels = [];
+    const worldLabelsEl = document.getElementById('world-labels');
+
+    function spawnGroundShockwave(x, z, maxRadius, colorHex = 0xfbbf24, duration = 0.34) {
+      const geo = new THREE.RingGeometry(0.25, maxRadius, 36);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(x, 0.08, z);
+      mesh.scale.setScalar(0.12);
+      scene.add(mesh);
+      vfxList.push({
+        t: 0,
+        dur: duration,
+        update(dt, p) {
+          const ease = 1 - Math.pow(1 - p, 3);
+          mesh.scale.setScalar(0.12 + ease * 0.92);
+          mat.opacity = 0.85 * (1 - p);
+        },
+        dispose() {
+          scene.remove(mesh);
+          geo.dispose();
+          mat.dispose();
+        }
+      });
+    }
+
+    function spawnSlashArc(x, y, z, yaw, radius = 2.6, dirSign = 1, colorHex = 0xfef08a) {
+      const geo = new THREE.RingGeometry(radius * 0.56, radius, 22, 1, -Math.PI * 0.44, Math.PI * 0.88);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.88,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, y, z);
+      // Orient horizontally facing yaw (`+Z` forward corresponds to Ring `+X` rotated by yaw - PI/2)
+      mesh.rotation.order = 'YXZ';
+      mesh.rotation.y = yaw - Math.PI / 2;
+      mesh.rotation.x = -Math.PI / 2 + dirSign * 0.22;
+      scene.add(mesh);
+      vfxList.push({
+        t: 0,
+        dur: 0.19,
+        update(dt, p) {
+          mesh.rotation.y += dirSign * dt * 5.5;
+          mesh.scale.setScalar(0.92 + p * 0.22);
+          mat.opacity = 0.88 * (1 - p);
+        },
+        dispose() {
+          scene.remove(mesh);
+          geo.dispose();
+          mat.dispose();
+        }
+      });
+    }
+
+    function spawnSparkBurst(x, y, z, colorHex = 0xfbbf24, count = 12, speed = 7) {
+      const group = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 1,
+        blending: THREE.AdditiveBlending
+      });
+      const geo = new THREE.BoxGeometry(0.11, 0.11, 0.28);
+      const parts = [];
+      for (let i = 0; i < count; i++) {
+        const m = new THREE.Mesh(geo, mat);
+        const a = Math.random() * Math.PI * 2;
+        const vy = 1.5 + Math.random() * 4.5;
+        const spd = speed * (0.5 + Math.random() * 0.7);
+        const vx = Math.cos(a) * spd;
+        const vz = Math.sin(a) * spd;
+        m.position.set(x, y, z);
+        m.lookAt(x + vx, y + vy, z + vz);
+        group.add(m);
+        parts.push({ m, vx, vy, vz });
+      }
+      scene.add(group);
+      vfxList.push({
+        t: 0,
+        dur: 0.36,
+        update(dt, p) {
+          parts.forEach((pt) => {
+            pt.vy -= 14 * dt;
+            pt.m.position.x += pt.vx * dt;
+            pt.m.position.y = Math.max(0.05, pt.m.position.y + pt.vy * dt);
+            pt.m.position.z += pt.vz * dt;
+          });
+          mat.opacity = 1 - p;
+        },
+        dispose() {
+          scene.remove(group);
+          geo.dispose();
+          mat.dispose();
+        }
+      });
+    }
+
+    // Chain Lightning / Ricochet Beam Flash between Bounce 1 -> Bounce 2
+    function spawnChainArcBeam(p1, p2) {
+      const points = [];
+      const segs = 9;
+      for (let i = 0; i <= segs; i++) {
+        const f = i / segs;
+        const pt = new THREE.Vector3().lerpVectors(p1, p2, f);
+        if (i > 0 && i < segs) {
+          pt.x += (Math.random() - 0.5) * 0.55;
+          pt.y += (Math.random() - 0.5) * 0.45;
+          pt.z += (Math.random() - 0.5) * 0.55;
+        }
+        points.push(pt);
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      const mat = new THREE.LineBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 1 });
+      const line = new THREE.Line(geo, mat);
+      scene.add(line);
+      vfxList.push({
+        t: 0,
+        dur: 0.28,
+        update(dt, p) {
+          mat.opacity = 1 - p;
+        },
+        dispose() {
+          scene.remove(line);
+          geo.dispose();
+          mat.dispose();
+        }
+      });
+    }
+
+    function spawnFloatText(worldPos, text, color = '#ffffff', scale = 1.0) {
+      const el = document.createElement('div');
+      el.className = 'float-text';
+      el.textContent = text;
+      el.style.color = color;
+      el.style.fontSize = `${Math.round(16 * scale)}px`;
+      worldLabelsEl.appendChild(el);
+      floatLabels.push({
+        el,
+        pos: worldPos.clone(),
+        vx: (Math.random() - 0.5) * 1.1,
+        vy: 2.3 + Math.random() * 0.8,
+        t: 0,
+        dur: 0.82
+      });
+    }
+
+    let bannerTimer = 0;
+    function showBanner(main, sub = '', dur = 1.6) {
+      document.getElementById('banner-main').textContent = main;
+      document.getElementById('banner-sub').textContent = sub;
+      document.getElementById('center-banner').classList.add('show');
+      bannerTimer = dur;
+    }
+
+    function flashScreen(cls) {
+      const fx = document.getElementById('screen-fx');
+      fx.classList.remove('hurt', 'parry');
+      void fx.offsetWidth;
+      fx.classList.add(cls);
+      setTimeout(() => fx.classList.remove(cls), 180);
+    }
+
+    // =========================================================================
+    // 6. GAME STATE: HERO, RAGE BAR -> 3 RAGE POINTS, FLYING SHIELD & ENEMIES
+    // =========================================================================
+    const heroModel = buildHeroModel();
+
+    const hero = {
+      x: 0,
+      z: 9,
+      yaw: Math.PI, // Facing -Z toward the Orcs initially
+      radius: 0.65,
+      hp: 500,
+      maxHp: 500,
+      barrier: 0,
+      barrierTimer: 0,
+      speedBuffTimer: 0,
+
+      // Core Mechanic: Melee builds rageBar (0..100) -> converts into ragePoints (0..3)
+      rageBar: 0,
+      ragePoints: 0,
+      maxRagePoints: 3,
+
+      // Action states: 'idle' | 'attack' | 'dash' | 'charge' | 'whirlwind' | 'dead'
+      state: 'idle',
+      stateTimer: 0,
+      comboStep: 0,
+      comboResetTimer: 0,
+      attackHitDone: false,
+
+      blocking: false,
+      blockStartTimestamp: -999, // For Perfect Parry window check
+
+      dashDirX: 0,
+      dashDirZ: -1,
+      dashCooldown: 0,
+
+      // Skill 1: Shield Charge
+      chargeDirX: 0,
+      chargeDirZ: -1,
+      chargeHitSet: new Set(),
+
+      // Skill 2: Chain Flying Shield
+      shieldOut: false,
+
+      // Skill 3: Blazing Whirlwind
+      wwTickTimer: 0,
+      wwTicksDone: 0,
+
+      invulnTimer: 0,
+      walkCycle: 0,
+
+      // Combat Stats
+      totalDamageDealt: 0,
+      parryCount: 0,
+      ragePointsEarned: 0
+    };
+
+    // Flying Shield Entity (for 2-Point Skill: Chain Shield Throw)
+    const { shield: flyingShieldMesh } = createShieldVisual();
+    const shieldHalo = new THREE.Mesh(
+      new THREE.RingGeometry(0.58, 1.02, 28),
+      new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
+    );
+    shieldHalo.rotation.x = Math.PI / 2;
+    const shieldLight = new THREE.PointLight(0xfbbf24, 3.2, 8.5);
+    flyingShieldMesh.add(shieldHalo, shieldLight);
+    flyingShieldMesh.rotation.x = Math.PI / 2; // Flat spinning disc orientation
+    flyingShieldMesh.visible = false;
+    scene.add(flyingShieldMesh);
+
+    const shieldProjectile = {
+      active: false,
+      phase: 'out', // 'toFirst' -> 'toSecond' -> 'return'
+      pos: new THREE.Vector3(),
+      target1: null,
+      target2: null,
+      lastTargetPos: new THREE.Vector3(),
+      trailTimer: 0
+    };
+
+    let enemies = [];
+    let activeTelegraphs = [];
+    let cameraShake = 0;
+    let hitstopTimer = 0;
+    let fightElapsed = 0;
+    let fightEnded = false;
+
+    // =========================================================================
+    // 7. RAGE GAIN & ENEMY SPAWNING HELPERS
+    // =========================================================================
+    function gainRageBar(amount, reasonText = '') {
+      if (hero.state === 'dead') return;
+      if (hero.ragePoints >= hero.maxRagePoints) {
+        hero.rageBar = 0;
+        return;
+      }
+      hero.rageBar += amount;
+      while (hero.rageBar >= 100 && hero.ragePoints < hero.maxRagePoints) {
+        hero.rageBar -= 100;
+        hero.ragePoints += 1;
+        hero.ragePointsEarned += 1;
+        sfx.ragePointUp(hero.ragePoints);
+        spawnGroundShockwave(hero.x, hero.z, 2.5, 0xf59e0b, 0.32);
+        spawnFloatText(
+          new THREE.Vector3(hero.x, 2.5, hero.z),
+          `✦ 怒气点激活 (${hero.ragePoints}/3) ✦`,
+          '#fde047',
+          1.18
+        );
+      }
+      if (hero.ragePoints >= hero.maxRagePoints) {
+        hero.rageBar = 0; // Cap cleanly at 3 points so spending points starts fresh bar from 0%
+      } else if (reasonText) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.1, hero.z), reasonText, '#fdba74', 0.92);
+      }
+    }
+
+    function createEnemy(type, x, z) {
+      const isBoss = type === 'boss';
+      const model = buildOrcModel(isBoss);
+      model.root.position.set(x, 0, z);
+
+      let plateEl = null;
+      let plateFillEl = null;
+      if (!isBoss) {
+        plateEl = document.createElement('div');
+        plateEl.className = 'enemy-plate';
+        plateEl.innerHTML = `
+          <div class="enemy-plate-name">半兽人战兵</div>
+          <div class="enemy-plate-bar"><div class="enemy-plate-fill"></div></div>
+        `;
+        worldLabelsEl.appendChild(plateEl);
+        plateFillEl = plateEl.querySelector('.enemy-plate-fill');
+      }
+
+      const enemy = {
+        id: Math.random().toString(36).slice(2),
+        type,
+        isBoss,
+        model,
+        plateEl,
+        plateFillEl,
+        x,
+        z,
+        yaw: 0,
+        radius: isBoss ? 1.15 : 0.72,
+        hp: isBoss ? 1800 : 260,
+        maxHp: isBoss ? 1800 : 260,
+        posture: 0,
+        maxPosture: 100,
+        moveSpeed: isBoss ? 3.85 : 4.45,
+        aiState: 'chase', // 'chase' | 'windup' | 'recover' | 'stunned' | 'dead'
+        aiTimer: 0.4 + Math.random() * 0.5,
+        currentMove: null,
+        attackTriggered: false,
+        attackCooldown: 0.8 + Math.random() * 0.6,
+        earthshakerCd: 5.5,
+        leapCd: 8.5,
+        summonCd: 14.0,
+        leapStart: new THREE.Vector3(),
+        leapTarget: new THREE.Vector3(),
+        slowTimer: 0,
+        flashTimer: 0,
+        knockVx: 0,
+        knockVz: 0,
+        walkPhase: Math.random() * Math.PI * 2,
+        deathProgress: 0,
+        strafeSign: Math.random() > 0.5 ? 1 : -1
+      };
+      enemies.push(enemy);
+      return enemy;
+    }
+
+    function createTelegraphCircle(x, z, radius, duration, colorHex = 0xef4444, owner = null) {
+      const group = new THREE.Group();
+      group.position.set(x, 0.05, z);
+
+      const borderGeo = new THREE.RingGeometry(radius - 0.14, radius, 44);
+      const borderMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.85
+      });
+      const border = new THREE.Mesh(borderGeo, borderMat);
+      border.rotation.x = -Math.PI / 2;
+
+      const fillGeo = new THREE.CircleGeometry(radius, 44);
+      const fillMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false
+      });
+      const fill = new THREE.Mesh(fillGeo, fillMat);
+      fill.rotation.x = -Math.PI / 2;
+      fill.scale.setScalar(0.05);
+
+      group.add(border, fill);
+      scene.add(group);
+
+      const tg = {
+        group,
+        fill,
+        borderGeo,
+        borderMat,
+        fillGeo,
+        fillMat,
+        owner,
+        t: 0,
+        dur: duration,
+        removed: false,
+        remove() {
+          if (this.removed) return;
+          this.removed = true;
+          scene.remove(group);
+          borderGeo.dispose();
+          borderMat.dispose();
+          fillGeo.dispose();
+          fillMat.dispose();
+        }
+      };
+      activeTelegraphs.push(tg);
+      return tg;
+    }
+
+    function clearAllTelegraphsFor(enemy) {
+      activeTelegraphs.forEach((tg) => {
+        if (tg.owner === enemy) tg.remove();
+      });
+    }
+
+    function resetEncounter() {
+      // Cleanup old enemies & telegraphs
+      enemies.forEach((e) => {
+        scene.remove(e.model.root);
+        if (e.plateEl) e.plateEl.remove();
+      });
+      enemies = [];
+      activeTelegraphs.forEach((tg) => tg.remove());
+      activeTelegraphs = [];
+
+      // Reset Hero
+      hero.x = 0;
+      hero.z = 9.5;
+      hero.yaw = Math.PI;
+      hero.hp = hero.maxHp;
+      hero.barrier = 0;
+      hero.barrierTimer = 0;
+      hero.speedBuffTimer = 0;
+      hero.rageBar = 0;
+      hero.ragePoints = 0;
+      hero.state = 'idle';
+      hero.stateTimer = 0;
+      hero.comboStep = 0;
+      hero.blocking = false;
+      hero.shieldOut = false;
+      hero.totalDamageDealt = 0;
+      hero.parryCount = 0;
+      hero.ragePointsEarned = 0;
+      heroModel.heldShield.visible = true;
+      heroModel.wwGroup.visible = false;
+      heroModel.spinRig.rotation.y = 0;
+      heroModel.root.rotation.z = 0;
+      flyingShieldMesh.visible = false;
+      shieldProjectile.active = false;
+
+      fightElapsed = 0;
+      fightEnded = false;
+      document.getElementById('result-overlay').classList.remove('visible');
+      document.getElementById('boss-hud').classList.remove('hidden');
+
+      // Spawn Orc Chieftain Boss + 3 Orc Warriors in the Forest Clearing
+      createEnemy('boss', 0, -8.5);
+      createEnemy('orc', -6.5, -5.0);
+      createEnemy('orc', 6.5, -5.0);
+      createEnemy('orc', 0, -2.8);
+
+      showBanner('林间遭遇战开始！', '近身挥剑与格挡积攒怒气点 · 灵活拉扯空间施放剑盾战技', 2.4);
+    }
+
+    // =========================================================================
+    // 8. INPUT HANDLING (WASD + Mouse Aim + LMB/RMB + 1/2/3 or Q/E/R)
+    // =========================================================================
+    const keys = {};
+    const mouseNDC = new THREE.Vector2(0, 0);
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const raycaster = new THREE.Raycaster();
+    const aimWorldPos = new THREE.Vector3(0, 0, 0);
+
+    window.addEventListener('keydown', (e) => {
+      sfx.init();
+      const k = e.key.toLowerCase();
+      keys[k] = true;
+
+      if (e.code === 'Space' || k === 'shift') {
+        e.preventDefault();
+        tryDash();
+      } else if (k === '1' || k === 'q') {
+        trySkill1ShieldCharge();
+      } else if (k === '2' || k === 'e') {
+        trySkill2ChainShieldThrow();
+      } else if (k === '3' || k === 'r') {
+        trySkill3Whirlwind();
+      } else if (k === 'j') {
+        tryBasicSwordAttack();
+      } else if (k === 'k') {
+        setBlocking(true);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const k = e.key.toLowerCase();
+      keys[k] = false;
+      if (k === 'k') setBlocking(false);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      sfx.init();
+      if (e.button === 0) {
+        tryBasicSwordAttack();
+      } else if (e.button === 2) {
+        setBlocking(true);
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button === 2) setBlocking(false);
+    });
+
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    window.addEventListener('wheel', (e) => {
+      camZoom = THREE.MathUtils.clamp(camZoom + e.deltaY * 0.01, 12.5, 25.5);
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // HUD Clickable Skill Cards & Sandbox Buttons
+    document.getElementById('skill-1').addEventListener('click', () => { sfx.init(); trySkill1ShieldCharge(); });
+    document.getElementById('skill-2').addEventListener('click', () => { sfx.init(); trySkill2ChainShieldThrow(); });
+    document.getElementById('skill-3').addEventListener('click', () => { sfx.init(); trySkill3Whirlwind(); });
+
+    document.getElementById('btn-reset').addEventListener('click', () => { sfx.init(); resetEncounter(); });
+    document.getElementById('btn-play-again').addEventListener('click', () => { sfx.init(); resetEncounter(); });
+    document.getElementById('btn-spawn-orcs').addEventListener('click', () => {
+      sfx.init();
+      if (fightEnded) return;
+      for (let i = 0; i < 2; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const r = 15 + Math.random() * 4;
+        const orc = createEnemy('orc', Math.cos(ang) * r, Math.sin(ang) * r);
+        spawnGroundShockwave(orc.x, orc.z, 2.0, 0x4ade80, 0.35);
+      }
+      showBanner('半兽人增援抵达！', '2 名半兽人战兵冲入林间空地', 1.3);
+    });
+    document.getElementById('btn-add-rage').addEventListener('click', () => {
+      sfx.init();
+      if (hero.ragePoints < hero.maxRagePoints) {
+        gainRageBar(100 - hero.rageBar);
+      } else {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.3, hero.z), '怒气点已达上限 (3/3)', '#fde047', 1.0);
+      }
+    });
+
+    // =========================================================================
+    // 9. HERO COMBAT ACTIONS & 3 RAGE-POINT SKILLS
+    // =========================================================================
+    function updateAimRay() {
+      raycaster.setFromCamera(mouseNDC, camera);
+      raycaster.ray.intersectPlane(groundPlane, aimWorldPos);
+      aimReticle.position.set(aimWorldPos.x, 0, aimWorldPos.z);
+    }
+
+    function angleToAim() {
+      return Math.atan2(aimWorldPos.x - hero.x, aimWorldPos.z - hero.z);
+    }
+
+    function setBlocking(flag) {
+      if (hero.state === 'dead') return;
+      if (flag) {
+        if (hero.shieldOut) {
+          spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '飞盾飞行中，无法举盾！', '#fca5a5', 0.92);
+          return;
+        }
+        if (!hero.blocking) {
+          hero.blocking = true;
+          hero.blockStartTimestamp = performance.now();
+        }
+      } else {
+        hero.blocking = false;
+      }
+    }
+
+    // Basic Melee 3-Hit Sword Combo (Builds Rage Bar!)
+    function tryBasicSwordAttack() {
+      if (hero.state === 'dead' || fightEnded) return;
+      if (hero.state === 'charge' || hero.state === 'whirlwind' || hero.state === 'dash') return;
+      // Allow chaining next combo step once current swing passes 62% completion
+      if (hero.state === 'attack' && hero.stateTimer > 0.11) return;
+
+      hero.blocking = false;
+      hero.state = 'attack';
+      hero.comboStep = (hero.comboResetTimer > 0) ? ((hero.comboStep % 3) + 1) : 1;
+      hero.stateTimer = hero.comboStep === 3 ? 0.36 : (hero.speedBuffTimer > 0 ? 0.23 : 0.28);
+      hero.comboResetTimer = 1.15;
+      hero.attackHitDone = false;
+      hero.yaw = angleToAim();
+
+      // Subtle forward step into melee swing
+      const lunge = hero.comboStep === 3 ? 0.55 : 0.32;
+      hero.x += Math.sin(hero.yaw) * lunge;
+      hero.z += Math.cos(hero.yaw) * lunge;
+
+      sfx.swing(hero.comboStep - 1);
+    }
+
+    // Tactical Evade / Sidestep (Adjusts Close <-> Far combat space)
+    function tryDash() {
+      if (hero.state === 'dead' || fightEnded) return;
+      if (hero.dashCooldown > 0 || hero.state === 'charge') return;
+      if (hero.state === 'whirlwind') return; // Already mobile & unstoppable in whirlwind
+
+      let mx = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
+      let mz = (keys['s'] ? 1 : 0) - (keys['w'] ? 1 : 0);
+      if (mx === 0 && mz === 0) {
+        const a = angleToAim();
+        mx = Math.sin(a);
+        mz = Math.cos(a);
+      } else {
+        const len = Math.hypot(mx, mz);
+        mx /= len;
+        mz /= len;
+      }
+
+      hero.blocking = false;
+      hero.state = 'dash';
+      hero.stateTimer = 0.21;
+      hero.dashCooldown = 0.62;
+      hero.invulnTimer = 0.24;
+      hero.dashDirX = mx;
+      hero.dashDirZ = mz;
+      hero.yaw = Math.atan2(mx, mz);
+      sfx.noise(0.14, 900, 0.12);
+      spawnGroundShockwave(hero.x, hero.z, 1.4, 0x93c5fd, 0.22);
+    }
+
+    // -------------------------------------------------------------------------
+    // SKILL 1 (Costs 1 Rage Point): 破阵盾冲 (Shieldbreaker Charge — Gap-Closer & Interrupt)
+    // -------------------------------------------------------------------------
+    function trySkill1ShieldCharge() {
+      if (hero.state === 'dead' || fightEnded) return;
+      if (hero.state === 'charge' || hero.state === 'whirlwind') return;
+      if (hero.shieldOut) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '等待飞盾返回手中！', '#fca5a5', 0.95);
+        return;
+      }
+      if (hero.ragePoints < 1) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '需要 1 个怒气点！近战积攒怒气', '#fdba74', 0.95);
+        return;
+      }
+
+      hero.ragePoints -= 1;
+      hero.blocking = false;
+      hero.state = 'charge';
+      hero.stateTimer = 0.30; // ~9.6m fast shield rush
+      hero.yaw = angleToAim();
+      hero.chargeDirX = Math.sin(hero.yaw);
+      hero.chargeDirZ = Math.cos(hero.yaw);
+      hero.chargeHitSet.clear();
+
+      // Grant Valor Absorb Barrier (120 HP for 4s) + Attack Speed buff
+      hero.barrier = 120;
+      hero.barrierTimer = 4.5;
+      hero.speedBuffTimer = 4.0;
+      hero.invulnTimer = 0.32;
+
+      sfx.shieldCharge();
+      actionLight.color.setHex(0x38bdf8);
+      actionLight.intensity = 4.5;
+      actionLight.position.set(hero.x, 1.6, hero.z);
+      spawnFloatText(new THREE.Vector3(hero.x, 2.5, hero.z), '🛡 破阵盾冲！', '#7dd3fc', 1.15);
+    }
+
+    // -------------------------------------------------------------------------
+    // SKILL 2 (Costs 2 Rage Points): 连锁飞盾 (Chain Shield Throw — Hits up to 2 Enemies -> Returns)
+    // -------------------------------------------------------------------------
+    function findFirstShieldTarget() {
+      const maxRange = 19.5;
+      const aimAng = angleToAim();
+      const aimDirX = Math.sin(aimAng);
+      const aimDirZ = Math.cos(aimAng);
+
+      let bestInCone = null;
+      let bestConeScore = Infinity;
+      let nearestAny = null;
+      let nearestDist = Infinity;
+
+      for (const e of enemies) {
+        if (e.aiState === 'dead') continue;
+        const dx = e.x - hero.x;
+        const dz = e.z - hero.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > maxRange) continue;
+
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestAny = e;
+        }
+        const dot = (dx / (dist || 1)) * aimDirX + (dz / (dist || 1)) * aimDirZ;
+        if (dot > 0.45) { // ~63 deg generous cone around cursor aim
+          const score = dist - dot * 4.5;
+          if (score < bestConeScore) {
+            bestConeScore = score;
+            bestInCone = e;
+          }
+        }
+      }
+      return bestInCone || nearestAny;
+    }
+
+    function trySkill2ChainShieldThrow() {
+      if (hero.state === 'dead' || fightEnded) return;
+      if (hero.shieldOut) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '盾牌已在飞行途中！', '#fde047', 0.95);
+        return;
+      }
+      if (hero.ragePoints < 2) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '需要 2 个怒气点！', '#fdba74', 0.95);
+        return;
+      }
+
+      const firstTarget = findFirstShieldTarget();
+      if (!firstTarget) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '射程内没有可弹射的敌军', '#fca5a5', 0.95);
+        return;
+      }
+
+      // Spend 2 Rage Points & Launch Shield!
+      hero.ragePoints -= 2;
+      hero.blocking = false;
+      hero.shieldOut = true;
+      heroModel.heldShield.visible = false;
+
+      hero.yaw = Math.atan2(firstTarget.x - hero.x, firstTarget.z - hero.z);
+
+      shieldProjectile.active = true;
+      shieldProjectile.phase = 'toFirst';
+      shieldProjectile.target1 = firstTarget;
+      shieldProjectile.target2 = null;
+      shieldProjectile.pos.set(hero.x, 1.25, hero.z);
+      shieldProjectile.lastTargetPos.set(firstTarget.x, 1.25, firstTarget.z);
+
+      flyingShieldMesh.position.copy(shieldProjectile.pos);
+      flyingShieldMesh.visible = true;
+
+      sfx.shieldThrowLaunch();
+      spawnFloatText(new THREE.Vector3(hero.x, 2.5, hero.z), '⚡ 连锁飞盾！', '#fde047', 1.18);
+    }
+
+    // -------------------------------------------------------------------------
+    // SKILL 3 (Costs 3 Rage Points): 怒焰旋风斩 (Blazing Whirlwind — Sustained AoE Storm)
+    // -------------------------------------------------------------------------
+    function trySkill3Whirlwind() {
+      if (hero.state === 'dead' || fightEnded) return;
+      if (hero.state === 'whirlwind') return;
+      if (hero.ragePoints < 3) {
+        spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), '需要攒满 3 个怒气点！', '#fdba74', 0.95);
+        return;
+      }
+
+      hero.ragePoints -= 3;
+      hero.rageBar = 0; // Unleash full stored fury cleanly
+      hero.blocking = false;
+      hero.state = 'whirlwind';
+      hero.stateTimer = 2.4;
+      hero.wwTickTimer = 0.05;
+      hero.wwTicksDone = 0;
+
+      heroModel.wwGroup.visible = true;
+      sfx.whirlwindTick(false);
+      spawnGroundShockwave(hero.x, hero.z, 4.4, 0xf97316, 0.36);
+      spawnFloatText(new THREE.Vector3(hero.x, 2.65, hero.z), '🌪 怒焰旋风斩！！', '#fb923c', 1.3);
+      cameraShake = Math.max(cameraShake, 0.32);
+    }
+
+    // =========================================================================
+    // 10. DAMAGE, POSTURE STAGGER & SHIELD BLOCK / PARRY RESOLUTION
+    // =========================================================================
+    function damageEnemy(enemy, amount, opts = {}) {
+      if (enemy.aiState === 'dead') return;
+      const {
+        knockForce = 2.5,
+        fromX = hero.x,
+        fromZ = hero.z,
+        postureDmg = 12,
+        stunDur = 0,
+        slowDur = 0,
+        grantRage = 0,
+        labelPrefix = '',
+        color = '#ffffff'
+      } = opts;
+
+      const finalDmg = Math.round(amount);
+      enemy.hp = Math.max(0, enemy.hp - finalDmg);
+      hero.totalDamageDealt += finalDmg;
+      enemy.flashTimer = 0.11;
+
+      // Knockback vector
+      const dx = enemy.x - fromX;
+      const dz = enemy.z - fromZ;
+      const dist = Math.hypot(dx, dz) || 1;
+      const kbResist = enemy.isBoss ? 0.22 : 1.0;
+      enemy.knockVx = (dx / dist) * knockForce * kbResist;
+      enemy.knockVz = (dz / dist) * knockForce * kbResist;
+
+      if (slowDur > 0) {
+        enemy.slowTimer = Math.max(enemy.slowTimer, slowDur);
+      }
+
+      // Stun & Boss Posture System
+      if (enemy.isBoss) {
+        if (enemy.aiState !== 'stunned') {
+          enemy.posture = Math.min(enemy.maxPosture, enemy.posture + postureDmg);
+          if (enemy.posture >= enemy.maxPosture) {
+            enemy.posture = 0;
+            enemy.aiState = 'stunned';
+            enemy.aiTimer = 3.2;
+            enemy.currentMove = null;
+            clearAllTelegraphsFor(enemy);
+            sfx.shieldSlam();
+            cameraShake = Math.max(cameraShake, 0.5);
+            spawnGroundShockwave(enemy.x, enemy.z, 4.5, 0xfef08a, 0.45);
+            showBanner('统领架势击破！', '半兽统领陷入 3.2 秒眩晕破防，近身倾泻输出！', 2.0);
+          }
+        }
+      } else if (stunDur > 0) {
+        enemy.aiState = 'stunned';
+        enemy.aiTimer = Math.max(enemy.aiTimer, stunDur);
+        enemy.currentMove = null;
+        clearAllTelegraphsFor(enemy);
+      }
+
+      // Rage gained ONLY from basic melee combat / blocks (never from spending rage skills)
+      if (grantRage > 0) {
+        gainRageBar(grantRage);
+      }
+
+      const txt = labelPrefix ? `${labelPrefix} -${finalDmg}` : `-${finalDmg}`;
+      spawnFloatText(
+        new THREE.Vector3(enemy.x, enemy.isBoss ? 3.2 : 2.1, enemy.z),
+        txt,
+        color,
+        enemy.isBoss ? 1.12 : 1.0
+      );
+      spawnSparkBurst(enemy.x, enemy.isBoss ? 1.8 : 1.2, enemy.z, 0xfbbf24, 7, 5.5);
+
+      if (enemy.hp <= 0) {
+        enemy.aiState = 'dead';
+        enemy.currentMove = null;
+        clearAllTelegraphsFor(enemy);
+        if (enemy.plateEl) enemy.plateEl.style.opacity = '0';
+        if (enemy.isBoss) {
+          sfx.bossRoar();
+          cameraShake = 0.65;
+          spawnGroundShockwave(enemy.x, enemy.z, 6.5, 0xfbbf24, 0.6);
+        }
+        checkEncounterEnd();
+      }
+    }
+
+    function damageHero(rawAmount, attacker, unblockable = false) {
+      if (hero.state === 'dead' || fightEnded || hero.invulnTimer > 0) return;
+
+      // Check Frontal Shield Block & Perfect Parry!
+      if (!unblockable && hero.blocking && !hero.shieldOut && attacker) {
+        const toAttackerX = attacker.x - hero.x;
+        const toAttackerZ = attacker.z - hero.z;
+        const len = Math.hypot(toAttackerX, toAttackerZ) || 1;
+        const heroFwdX = Math.sin(hero.yaw);
+        const heroFwdZ = Math.cos(hero.yaw);
+        const dot = (toAttackerX / len) * heroFwdX + (toAttackerZ / len) * heroFwdZ;
+
+        if (dot > 0.15) { // Blocked from front 160° arc!
+          const heldMs = performance.now() - hero.blockStartTimestamp;
+          const isPerfect = heldMs <= 260;
+
+          if (isPerfect) {
+            hero.parryCount += 1;
+            sfx.block(true);
+            flashScreen('parry');
+            hitstopTimer = 0.055;
+            cameraShake = Math.max(cameraShake, 0.32);
+            spawnSparkBurst(hero.x + heroFwdX * 0.8, 1.3, hero.z + heroFwdZ * 0.8, 0xfef08a, 16, 8.5);
+            spawnGroundShockwave(hero.x, hero.z, 3.0, 0xfef08a, 0.3);
+            gainRageBar(45, '精准弹反! +45%怒气');
+
+            // Stagger attacker / deal posture damage to Boss
+            if (attacker.isBoss) {
+              damageEnemy(attacker, 35, {
+                postureDmg: 38,
+                knockForce: 4,
+                labelPrefix: '弹反震击',
+                color: '#fde047'
+              });
+            } else {
+              damageEnemy(attacker, 25, {
+                stunDur: 1.5,
+                knockForce: 7,
+                labelPrefix: '弹反眩晕',
+                color: '#fde047'
+              });
+            }
+            return;
+          } else {
+            // Standard Shield Block: 75% mitigation + 20% Rage Bar!
+            sfx.block(false);
+            spawnSparkBurst(hero.x + heroFwdX * 0.7, 1.2, hero.z + heroFwdZ * 0.7, 0x93c5fd, 9, 6);
+            gainRageBar(20, '格挡 +20%怒气');
+            rawAmount *= 0.25;
+          }
+        }
+      }
+
+      // Whirlwind Super-Armor 50% Damage Reduction
+      if (hero.state === 'whirlwind') {
+        rawAmount *= 0.5;
+      }
+
+      let dmg = Math.round(rawAmount);
+      if (dmg <= 0) return;
+
+      // Absorb Barrier first
+      if (hero.barrier > 0) {
+        const absorbed = Math.min(hero.barrier, dmg);
+        hero.barrier -= absorbed;
+        dmg -= absorbed;
+        if (dmg <= 0) {
+          spawnFloatText(new THREE.Vector3(hero.x, 2.2, hero.z), `护盾吸收 (${absorbed})`, '#7dd3fc', 0.95);
+          return;
+        }
+      }
+
+      hero.hp = Math.max(0, hero.hp - dmg);
+      flashScreen('hurt');
+      sfx.meleeHit(true);
+      cameraShake = Math.max(cameraShake, 0.28);
+      spawnFloatText(new THREE.Vector3(hero.x, 2.1, hero.z), `-${dmg}`, '#f87171', 1.1);
+
+      if (hero.hp <= 0) {
+        hero.state = 'dead';
+        hero.blocking = false;
+        heroModel.wwGroup.visible = false;
+        endEncounter(false);
+      }
+    }
+
+    function checkEncounterEnd() {
+      const aliveCount = enemies.filter((e) => e.aiState !== 'dead').length;
+      if (aliveCount === 0 && !fightEnded) {
+        endEncounter(true);
+      }
+    }
+
+    function endEncounter(victory) {
+      fightEnded = true;
+      const overlay = document.getElementById('result-overlay');
+      const title = document.getElementById('result-title');
+      const stats = document.getElementById('result-stats');
+
+      title.textContent = victory ? '🏆 森林肃清 · 统领讨伐成功！' : '💀 力战倒下 · 再试锋芒';
+      title.style.color = victory ? '#fde68a' : '#f87171';
+      stats.innerHTML = `
+        战斗用时：<b>${fightElapsed.toFixed(1)} 秒</b><br/>
+        累计造成伤害：<b>${hero.totalDamageDealt}</b><br/>
+        激活怒气点总数：<b>${hero.ragePointsEarned} 点</b><br/>
+        触发精准弹反：<b>${hero.parryCount} 次</b>
+      `;
+      setTimeout(() => overlay.classList.add('visible'), 650);
+    }
+
+    // =========================================================================
+    // 11. UPDATE LOOPS: HERO, FLYING CHAIN SHIELD, ENEMY AI & COLLISIONS
+    // =========================================================================
+    function resolveArenaAndObstacles(entity) {
+      // Collide against scenic boulders/stumps
+      for (const ob of obstacles) {
+        const dx = entity.x - ob.x;
+        const dz = entity.z - ob.z;
+        const dist = Math.hypot(dx, dz);
+        const minD = entity.radius + ob.r;
+        if (dist < minD && dist > 0.001) {
+          entity.x = ob.x + (dx / dist) * minD;
+          entity.z = ob.z + (dz / dist) * minD;
+        }
+      }
+      // Keep inside forest glade circle
+      const r = Math.hypot(entity.x, entity.z);
+      const maxR = ARENA_RADIUS - entity.radius;
+      if (r > maxR) {
+        entity.x = (entity.x / r) * maxR;
+        entity.z = (entity.z / r) * maxR;
+      }
+    }
+
+    function updateHero(dt, nowSec) {
+      if (hero.dashCooldown > 0) hero.dashCooldown -= dt;
+      if (hero.invulnTimer > 0) hero.invulnTimer -= dt;
+      if (hero.comboResetTimer > 0) hero.comboResetTimer -= dt;
+      if (hero.speedBuffTimer > 0) hero.speedBuffTimer -= dt;
+      if (hero.barrierTimer > 0) {
+        hero.barrierTimer -= dt;
+        if (hero.barrierTimer <= 0) hero.barrier = 0;
+      }
+
+      if (hero.state === 'dead') {
+        heroModel.root.rotation.z = THREE.MathUtils.lerp(heroModel.root.rotation.z, Math.PI / 2, dt * 6);
+        heroModel.root.position.set(hero.x, 0.25, hero.z);
+        return;
+      }
+
+      let mx = (keys['d'] ? 1 : 0) - (keys['a'] ? 1 : 0);
+      let mz = (keys['s'] ? 1 : 0) - (keys['w'] ? 1 : 0);
+      const moving = mx !== 0 || mz !== 0;
+      if (moving) {
+        const len = Math.hypot(mx, mz);
+        mx /= len;
+        mz /= len;
+      }
+
+      // State Machine
+      if (hero.state === 'idle') {
+        const baseSpd = hero.blocking ? 4.0 : 6.7;
+        if (moving) {
+          hero.x += mx * baseSpd * dt;
+          hero.z += mz * baseSpd * dt;
+          hero.walkCycle += dt * (hero.blocking ? 7 : 11);
+        }
+        // Face cursor so shield block & attacks always track player's tactical aim
+        const targetYaw = angleToAim();
+        let diff = targetYaw - hero.yaw;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        hero.yaw += diff * Math.min(1, dt * 16);
+
+      } else if (hero.state === 'dash') {
+        hero.stateTimer -= dt;
+        hero.x += hero.dashDirX * 19.5 * dt;
+        hero.z += hero.dashDirZ * 19.5 * dt;
+        if (hero.stateTimer <= 0) hero.state = 'idle';
+
+      } else if (hero.state === 'attack') {
+        hero.stateTimer -= dt;
+        const totalDur = hero.comboStep === 3 ? 0.36 : 0.28;
+        const prog = 1 - Math.max(0, hero.stateTimer / totalDur);
+
+        // Trigger Melee Cleave Hitbox mid-swing
+        if (!hero.attackHitDone && prog >= 0.42) {
+          hero.attackHitDone = true;
+          const reach = hero.comboStep === 3 ? 3.55 : 3.15;
+          const dirSign = hero.comboStep === 2 ? -1 : 1;
+          spawnSlashArc(
+            hero.x, 1.15, hero.z, hero.yaw, reach * 0.92, dirSign,
+            hero.comboStep === 3 ? 0xfb923c : 0xfef08a
+          );
+
+          const fwdX = Math.sin(hero.yaw);
+          const fwdZ = Math.cos(hero.yaw);
+          let hitIndex = 0;
+
+          for (const e of enemies) {
+            if (e.aiState === 'dead') continue;
+            const dx = e.x - hero.x;
+            const dz = e.z - hero.z;
+            const dist = Math.hypot(dx, dz) - e.radius;
+            if (dist <= reach) {
+              const dNorm = Math.hypot(dx, dz) || 1;
+              const dot = (dx / dNorm) * fwdX + (dz / dNorm) * fwdZ;
+              if (dot > -0.15 || dist < 1.1) {
+                const baseDmg = hero.comboStep === 3 ? 68 : (hero.comboStep === 2 ? 46 : 40);
+                // First enemy hit grants full Rage Bar gain; extra cleaved enemies grant +7 bonus
+                const rageGain = hitIndex === 0
+                  ? (hero.comboStep === 3 ? 34 : 22)
+                  : 7;
+                damageEnemy(e, baseDmg, {
+                  knockForce: hero.comboStep === 3 ? 5.5 : 2.5,
+                  postureDmg: hero.comboStep === 3 ? 16 : 8,
+                  stunDur: hero.comboStep === 3 ? 0.35 : 0,
+                  grantRage: rageGain,
+                  color: hero.comboStep === 3 ? '#fde047' : '#ffffff'
+                });
+                hitIndex++;
+              }
+            }
+          }
+          if (hitIndex > 0) {
+            sfx.meleeHit(hero.comboStep === 3);
+            if (hero.comboStep === 3) {
+              hitstopTimer = 0.042;
+              cameraShake = Math.max(cameraShake, 0.2);
+            }
+          }
+        }
+        if (hero.stateTimer <= 0) hero.state = 'idle';
+
+      } else if (hero.state === 'charge') {
+        // Skill 1: High-speed Shieldbreaker Rush
+        hero.stateTimer -= dt;
+        const rushSpd = 28.5;
+        hero.x += hero.chargeDirX * rushSpd * dt;
+        hero.z += hero.chargeDirZ * rushSpd * dt;
+
+        // Check collision with enemies along rush path
+        let hitBossStop = false;
+        for (const e of enemies) {
+          if (e.aiState === 'dead' || hero.chargeHitSet.has(e)) continue;
+          const dist = Math.hypot(e.x - hero.x, e.z - hero.z);
+          if (dist <= hero.radius + e.radius + 1.15) {
+            hero.chargeHitSet.add(e);
+            sfx.shieldSlam();
+            hitstopTimer = 0.055;
+            cameraShake = Math.max(cameraShake, 0.36);
+            spawnGroundShockwave(e.x, e.z, 3.6, 0x38bdf8, 0.36);
+
+            // AoE shockwave around impact point so packed grunts all get stunned/interrupted!
+            for (const sub of enemies) {
+              if (sub.aiState === 'dead') continue;
+              if (Math.hypot(sub.x - e.x, sub.z - e.z) <= 3.6) {
+                hero.chargeHitSet.add(sub);
+                // Interrupt enemy windups!
+                if (sub.aiState === 'windup' && (!sub.isBoss || sub.currentMove !== 'earthshaker')) {
+                  clearAllTelegraphsFor(sub);
+                  sub.aiState = 'stunned';
+                  sub.aiTimer = sub.isBoss ? 1.1 : 1.6;
+                  sub.currentMove = null;
+                }
+                damageEnemy(sub, 90, {
+                  knockForce: 8.5,
+                  postureDmg: 45,
+                  stunDur: 1.5,
+                  grantRage: 0, // Skill consumes rage point, doesn't self-refill
+                  labelPrefix: '盾猛破阵',
+                  color: '#7dd3fc'
+                });
+              }
+            }
+            if (e.isBoss) hitBossStop = true;
+          }
+        }
+
+        if (hitBossStop || hero.stateTimer <= 0) {
+          hero.state = 'idle';
+        }
+
+      } else if (hero.state === 'whirlwind') {
+        // Skill 3: Blazing Whirlwind (Mobile + Super Armor + Multi-hit 360° Vortex)
+        hero.stateTimer -= dt;
+        if (moving) {
+          hero.x += mx * 7.6 * dt;
+          hero.z += mz * 7.6 * dt;
+        }
+        heroModel.spinRig.rotation.y += dt * 22.0;
+        heroModel.wwGroup.rotation.y -= dt * 16.0;
+
+        hero.wwTickTimer -= dt;
+        if (hero.wwTickTimer <= 0) {
+          hero.wwTicksDone += 1;
+          hero.wwTickTimer = 0.27;
+          const isFinal = hero.stateTimer <= 0.22;
+          const radius = isFinal ? 5.0 : 4.25;
+
+          sfx.whirlwindTick(isFinal);
+          spawnSlashArc(hero.x, 1.1, hero.z, heroModel.spinRig.rotation.y, radius * 0.95, 1, 0xf97316);
+          if (isFinal) {
+            spawnGroundShockwave(hero.x, hero.z, 5.2, 0xf97316, 0.42);
+            cameraShake = Math.max(cameraShake, 0.42);
+          }
+
+          for (const e of enemies) {
+            if (e.aiState === 'dead') continue;
+            const dx = e.x - hero.x;
+            const dz = e.z - hero.z;
+            const dist = Math.hypot(dx, dz) - e.radius;
+            if (dist <= radius) {
+              // Slight inward pull on ticks 1..7 so grunts stay in vortex; big knockback on final slash!
+              if (!isFinal && !e.isBoss && dist > 1.3) {
+                e.x -= (dx / (dist + 1)) * 0.55;
+                e.z -= (dz / (dist + 1)) * 0.55;
+              }
+              damageEnemy(e, isFinal ? 115 : 44, {
+                knockForce: isFinal ? 10.0 : 1.0,
+                postureDmg: isFinal ? 24 : 7,
+                stunDur: isFinal ? 1.0 : 0.15,
+                grantRage: 0,
+                labelPrefix: isFinal ? '旋风终结' : '',
+                color: isFinal ? '#fb923c' : '#fed7aa'
+              });
+            }
+          }
+        }
+
+        if (hero.stateTimer <= 0) {
+          hero.state = 'idle';
+          heroModel.spinRig.rotation.y = 0;
+          heroModel.wwGroup.visible = false;
+        }
+      }
+
+      resolveArenaAndObstacles(hero);
+
+      // Sync Hero Model Transforms & Procedural Limb Animations
+      heroModel.root.position.set(hero.x, 0, hero.z);
+      heroModel.root.rotation.y = hero.yaw;
+
+      // Leg stride
+      const legAmp = (moving && hero.state === 'idle') ? 0.55 : (hero.state === 'charge' ? 0.75 : 0);
+      heroModel.leftLeg.rotation.x = Math.sin(hero.walkCycle) * legAmp;
+      heroModel.rightLeg.rotation.x = -Math.sin(hero.walkCycle) * legAmp;
+
+      // Sword & Shield Arm Poses
+      if (hero.state === 'attack') {
+        const swingSign = hero.comboStep === 2 ? -1 : 1;
+        heroModel.rightArm.rotation.x = -1.1;
+        heroModel.rightArm.rotation.z = swingSign * 0.9;
+        heroModel.bodyPivot.rotation.y = swingSign * 0.42;
+      } else if (hero.state === 'whirlwind') {
+        heroModel.rightArm.rotation.set(-1.35, 0, -1.25);
+        heroModel.bodyPivot.rotation.y = 0;
+      } else {
+        heroModel.rightArm.rotation.x = THREE.MathUtils.lerp(heroModel.rightArm.rotation.x, -0.15, dt * 12);
+        heroModel.rightArm.rotation.z = THREE.MathUtils.lerp(heroModel.rightArm.rotation.z, 0, dt * 12);
+        heroModel.bodyPivot.rotation.y = THREE.MathUtils.lerp(heroModel.bodyPivot.rotation.y, 0, dt * 12);
+      }
+
+      if (hero.blocking || hero.state === 'charge') {
+        heroModel.leftArm.position.set(0.18, 0.76, 0.25);
+        heroModel.leftArm.rotation.y = -0.52;
+        heroModel.blockWardMat.opacity = THREE.MathUtils.lerp(heroModel.blockWardMat.opacity, 0.36, dt * 14);
+      } else {
+        heroModel.leftArm.position.set(0.52, 0.72, 0);
+        heroModel.leftArm.rotation.y = THREE.MathUtils.lerp(heroModel.leftArm.rotation.y, 0, dt * 12);
+        heroModel.blockWardMat.opacity = THREE.MathUtils.lerp(heroModel.blockWardMat.opacity, 0, dt * 14);
+      }
+
+      // Sword Emissive Aura & 3 Floating Rage Orbs scale with stored Rage Points (0..3)
+      heroModel.bladeMat.emissiveIntensity = hero.ragePoints * 0.32;
+      for (let i = 0; i < 3; i++) {
+        const orbObj = heroModel.rageOrbs[i];
+        const active = i < hero.ragePoints;
+        orbObj.mat.opacity = THREE.MathUtils.lerp(orbObj.mat.opacity, active ? 0.95 : 0, dt * 10);
+        const orbitAng = nowSec * 2.8 + (i * Math.PI * 2) / 3;
+        orbObj.mesh.position.set(
+          Math.cos(orbitAng) * 0.62,
+          1.45 + Math.sin(nowSec * 4 + i) * 0.08,
+          Math.sin(orbitAng) * 0.62 - 0.15
+        );
+        orbObj.mesh.rotation.y += dt * 3;
+      }
+
+      // Valor Absorb Barrier visual
+      heroModel.barrierMat.opacity = hero.barrier > 0 ? (0.18 + Math.sin(nowSec * 8) * 0.05) : 0;
+      heroModel.barrierSphere.rotation.y += dt * 1.2;
+    }
+
+    // =========================================================================
+    // 12. UPDATE FLYING SHIELD PROJECTILE (2-Point Skill: Sequential 2-Target Chain -> Return)
+    // =========================================================================
+    function spawnShieldAfterimage(x, y, z) {
+      const geo = new THREE.RingGeometry(0.32, 0.72, 18);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.62,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+      const ring = new THREE.Mesh(geo, mat);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(x, y, z);
+      scene.add(ring);
+      vfxList.push({
+        t: 0,
+        dur: 0.22,
+        update(dt, p) {
+          ring.scale.setScalar(1 - p * 0.45);
+          mat.opacity = 0.62 * (1 - p);
+        },
+        dispose() {
+          scene.remove(ring);
+          geo.dispose();
+          mat.dispose();
+        }
+      });
+    }
+
+    function updateFlyingShield(dt) {
+      if (!shieldProjectile.active) return;
+
+      flyingShieldMesh.rotation.z += dt * 26; // Fast frisbee spin
+      shieldProjectile.trailTimer -= dt;
+      if (shieldProjectile.trailTimer <= 0) {
+        shieldProjectile.trailTimer = 0.024;
+        spawnShieldAfterimage(
+          shieldProjectile.pos.x,
+          shieldProjectile.pos.y,
+          shieldProjectile.pos.z
+        );
+      }
+
+      if (shieldProjectile.phase === 'toFirst') {
+        const t1 = shieldProjectile.target1;
+        if (t1 && t1.aiState !== 'dead') {
+          shieldProjectile.lastTargetPos.set(t1.x, t1.isBoss ? 1.65 : 1.2, t1.z);
+        }
+        const toDest = new THREE.Vector3().subVectors(shieldProjectile.lastTargetPos, shieldProjectile.pos);
+        const dist = toDest.length();
+        const step = 22.5 * dt;
+
+        if (dist <= Math.max(0.72, step)) {
+          // IMPACT #1!
+          shieldProjectile.pos.copy(shieldProjectile.lastTargetPos);
+          if (t1 && t1.aiState !== 'dead') {
+            sfx.shieldBounce(1);
+            cameraShake = Math.max(cameraShake, 0.24);
+            spawnGroundShockwave(t1.x, t1.z, 2.8, 0xfef08a, 0.3);
+            damageEnemy(t1, 120, {
+              knockForce: 5.5,
+              fromX: hero.x,
+              fromZ: hero.z,
+              postureDmg: 22,
+              stunDur: 0.9,
+              slowDur: 3.0,
+              grantRage: 0,
+              labelPrefix: '飞盾撞击①',
+              color: '#fde047'
+            });
+          }
+
+          // Search nearby 2nd enemy (within 16m of Target 1) like Chain Lightning!
+          let bestSecond = null;
+          let bestDist = 16.0;
+          for (const cand of enemies) {
+            if (cand === t1 || cand.aiState === 'dead') continue;
+            const d2 = Math.hypot(cand.x - shieldProjectile.pos.x, cand.z - shieldProjectile.pos.z);
+            if (d2 < bestDist) {
+              bestDist = d2;
+              bestSecond = cand;
+            }
+          }
+
+          if (bestSecond) {
+            shieldProjectile.target2 = bestSecond;
+            shieldProjectile.lastTargetPos.set(bestSecond.x, bestSecond.isBoss ? 1.65 : 1.2, bestSecond.z);
+            shieldProjectile.phase = 'toSecond';
+            spawnChainArcBeam(shieldProjectile.pos, shieldProjectile.lastTargetPos);
+          } else {
+            shieldProjectile.phase = 'return';
+          }
+        } else {
+          shieldProjectile.pos.addScaledVector(toDest.normalize(), step);
+        }
+
+      } else if (shieldProjectile.phase === 'toSecond') {
+        const t2 = shieldProjectile.target2;
+        if (t2 && t2.aiState !== 'dead') {
+          shieldProjectile.lastTargetPos.set(t2.x, t2.isBoss ? 1.65 : 1.2, t2.z);
+        }
+        const toDest = new THREE.Vector3().subVectors(shieldProjectile.lastTargetPos, shieldProjectile.pos);
+        const dist = toDest.length();
+        const step = 20.5 * dt;
+
+        if (dist <= Math.max(0.72, step)) {
+          // IMPACT #2 (Chain Ricochet Hit)!
+          shieldProjectile.pos.copy(shieldProjectile.lastTargetPos);
+          if (t2 && t2.aiState !== 'dead') {
+            sfx.shieldBounce(2);
+            cameraShake = Math.max(cameraShake, 0.28);
+            spawnGroundShockwave(t2.x, t2.z, 3.1, 0xfbbf24, 0.34);
+            damageEnemy(t2, 135, {
+              knockForce: 6.5,
+              fromX: shieldProjectile.target1 ? shieldProjectile.target1.x : hero.x,
+              fromZ: shieldProjectile.target1 ? shieldProjectile.target1.z : hero.z,
+              postureDmg: 26,
+              stunDur: 1.0,
+              slowDur: 3.0,
+              grantRage: 0,
+              labelPrefix: '连锁弹射②',
+              color: '#fbbf24'
+            });
+          }
+          shieldProjectile.phase = 'return';
+        } else {
+          shieldProjectile.pos.addScaledVector(toDest.normalize(), step);
+        }
+
+      } else if (shieldProjectile.phase === 'return') {
+        const heroHand = new THREE.Vector3(hero.x, 1.25, hero.z);
+        const toHero = new THREE.Vector3().subVectors(heroHand, shieldProjectile.pos);
+        const dist = toHero.length();
+        const step = 25.5 * dt;
+
+        if (dist <= Math.max(0.85, step)) {
+          // Catch shield back on Warrior's left arm!
+          shieldProjectile.active = false;
+          flyingShieldMesh.visible = false;
+          hero.shieldOut = false;
+          heroModel.heldShield.visible = true;
+          sfx.shieldCatch();
+          spawnSparkBurst(hero.x, 1.25, hero.z, 0x93c5fd, 6, 3.5);
+        } else {
+          shieldProjectile.pos.addScaledVector(toHero.normalize(), step);
+        }
+      }
+
+      flyingShieldMesh.position.copy(shieldProjectile.pos);
+    }
+
+    // =========================================================================
+    // 13. ENEMY AI: ORC WARRIORS & ORC CHIEFTAIN BOSS (Creates Close/Far Space!)
+    // =========================================================================
+    function updateEnemies(dt) {
+      let bossRef = null;
+      let aliveGrunts = 0;
+
+      for (const e of enemies) {
+        if (e.isBoss && e.aiState !== 'dead') bossRef = e;
+        if (!e.isBoss && e.aiState !== 'dead') aliveGrunts++;
+      }
+
+      for (let i = 0; i < enemies.length; i++) {
+        const e = enemies[i];
+
+        // Hit-flash decay
+        if (e.flashTimer > 0) {
+          e.flashTimer -= dt;
+          const em = e.flashTimer > 0 ? 0xffffff : 0x000000;
+          e.model.flashMats.forEach((m) => {
+            m.emissive.setHex(em);
+            m.emissiveIntensity = e.flashTimer > 0 ? 0.65 : 0;
+          });
+        }
+
+        if (e.aiState === 'dead') {
+          e.deathProgress = Math.min(1, e.deathProgress + dt * 3.5);
+          e.model.bodyWrap.rotation.x = -e.deathProgress * (Math.PI / 2);
+          e.model.bodyWrap.position.y = -e.deathProgress * 0.35;
+          continue;
+        }
+
+        // Knockback decay
+        if (Math.abs(e.knockVx) > 0.05 || Math.abs(e.knockVz) > 0.05) {
+          e.x += e.knockVx * dt;
+          e.z += e.knockVz * dt;
+          e.knockVx *= Math.pow(0.02, dt);
+          e.knockVz *= Math.pow(0.02, dt);
+        }
+
+        if (e.slowTimer > 0) e.slowTimer -= dt;
+        if (e.attackCooldown > 0) e.attackCooldown -= dt;
+        if (e.isBoss) {
+          if (e.earthshakerCd > 0) e.earthshakerCd -= dt;
+          if (e.leapCd > 0) e.leapCd -= dt;
+          if (e.summonCd > 0) e.summonCd -= dt;
+          // Boss posture slowly recovers only while chasing
+          if (e.aiState === 'chase' && e.posture > 0) {
+            e.posture = Math.max(0, e.posture - dt * 2.2);
+          }
+        }
+
+        const dx = hero.x - e.x;
+        const dz = hero.z - e.z;
+        const distToHero = Math.hypot(dx, dz);
+        const angleToHero = Math.atan2(dx, dz);
+
+        if (e.aiState === 'stunned') {
+          e.aiTimer -= dt;
+          e.model.torso.rotation.z = Math.sin(performance.now() * 0.03) * 0.14;
+          if (e.aiTimer <= 0) {
+            e.aiState = 'chase';
+            e.model.torso.rotation.z = 0;
+          }
+
+        } else if (e.aiState === 'chase') {
+          e.yaw = angleToHero;
+          const slowMult = e.slowTimer > 0 ? 0.58 : 1.0;
+
+          // Separation push from other enemies so they surround cleanly instead of stacking
+          let sepX = 0;
+          let sepZ = 0;
+          for (let j = 0; j < enemies.length; j++) {
+            if (i === j || enemies[j].aiState === 'dead') continue;
+            const odx = e.x - enemies[j].x;
+            const odz = e.z - enemies[j].z;
+            const od = Math.hypot(odx, odz);
+            const minSep = e.radius + enemies[j].radius + 0.65;
+            if (od < minSep && od > 0.01) {
+              sepX += (odx / od) * 2.8;
+              sepZ += (odz / od) * 2.8;
+            }
+          }
+
+          const stopDist = e.isBoss ? 2.85 : 2.15;
+          if (distToHero > stopDist) {
+            const moveX = (dx / (distToHero || 1)) * e.moveSpeed * slowMult + sepX;
+            const moveZ = (dz / (distToHero || 1)) * e.moveSpeed * slowMult + sepZ;
+            e.x += moveX * dt;
+            e.z += moveZ * dt;
+            e.walkPhase += dt * 9 * slowMult;
+          } else {
+            // Slight tactical strafe when up close
+            const perpX = -dz / (distToHero || 1) * e.strafeSign * 1.1;
+            const perpZ = dx / (distToHero || 1) * e.strafeSign * 1.1;
+            e.x += (perpX + sepX) * dt;
+            e.z += (perpZ + sepZ) * dt;
+            e.walkPhase += dt * 4;
+          }
+
+          // Choose Attacks!
+          if (e.isBoss && hero.state !== 'dead') {
+            // 1. Warhorn Summon if all Orc Grunts are dead (ensures Chain Shield & Whirlwind stay exciting!)
+            if (aliveGrunts === 0 && e.summonCd <= 0) {
+              e.aiState = 'windup';
+              e.currentMove = 'summon';
+              e.aiTimer = 1.0;
+              e.summonCd = 18.0;
+              e.attackTriggered = false;
+              sfx.bossRoar();
+              showBanner('半兽统领吹响战角！', '2 名半兽人战兵从森林边缘冲出助战！', 1.8);
+            }
+            // 2. DANGER CLOSE AOE: Earthshaker Slam -> Forces Hero to retreat & use 2-Point Ranged Shield Throw!
+            else if (distToHero < 5.6 && e.earthshakerCd <= 0) {
+              e.aiState = 'windup';
+              e.currentMove = 'earthshaker';
+              e.aiTimer = 1.38;
+              e.earthshakerCd = 10.5;
+              e.attackTriggered = false;
+              sfx.bossRoar();
+              createTelegraphCircle(e.x, e.z, 6.8, 1.38, 0xdc2626, e);
+              spawnFloatText(new THREE.Vector3(e.x, 3.6, e.z), '⚠ 裂地猛击（不可格挡·快远离！）', '#fca5a5', 1.12);
+            }
+            // 3. Long-range Warchief Leap Slam -> Closes distance if player stays far
+            else if (distToHero > 8.8 && distToHero < 19.0 && e.leapCd <= 0) {
+              e.aiState = 'windup';
+              e.currentMove = 'leap';
+              e.aiTimer = 1.05;
+              e.leapCd = 9.5;
+              e.attackTriggered = false;
+              e.leapStart.set(e.x, 0, e.z);
+              e.leapTarget.set(hero.x, 0, hero.z);
+              createTelegraphCircle(hero.x, hero.z, 3.7, 1.05, 0xf97316, e);
+              spawnFloatText(new THREE.Vector3(e.x, 3.5, e.z), '⚡ 统领跳劈！', '#fdba74', 1.08);
+            }
+            // 4. Close-range Bonecrusher Cleave (Blockable / Parryable for massive Rage!)
+            else if (distToHero <= 3.9 && e.attackCooldown <= 0) {
+              e.aiState = 'windup';
+              e.currentMove = 'cleave';
+              e.aiTimer = 0.74;
+              e.attackCooldown = 1.65;
+              e.attackTriggered = false;
+              createTelegraphCircle(
+                e.x + Math.sin(e.yaw) * 2.1,
+                e.z + Math.cos(e.yaw) * 2.1,
+                2.75,
+                0.74,
+                0xf59e0b,
+                e
+              );
+            }
+          } else if (!e.isBoss && hero.state !== 'dead') {
+            // Orc Warrior Cleaver Slash
+            if (distToHero <= 2.75 && e.attackCooldown <= 0) {
+              e.aiState = 'windup';
+              e.currentMove = 'slash';
+              e.aiTimer = 0.58;
+              e.attackCooldown = 1.5 + Math.random() * 0.6;
+              e.attackTriggered = false;
+            }
+          }
+
+        } else if (e.aiState === 'windup') {
+          e.aiTimer -= dt;
+          // Wind-up arm raise animation
+          e.model.rightArm.rotation.x = THREE.MathUtils.lerp(e.model.rightArm.rotation.x, -2.35, dt * 8);
+
+          if (e.currentMove === 'leap') {
+            // Parabolic jump arc toward target spot
+            const p = 1 - Math.max(0, e.aiTimer / 1.05);
+            e.x = THREE.MathUtils.lerp(e.leapStart.x, e.leapTarget.x, p);
+            e.z = THREE.MathUtils.lerp(e.leapStart.z, e.leapTarget.z, p);
+            e.model.bodyWrap.position.y = Math.sin(p * Math.PI) * 4.6;
+          }
+
+          if (e.aiTimer <= 0 && !e.attackTriggered) {
+            e.attackTriggered = true;
+            e.model.bodyWrap.position.y = 0;
+            e.model.rightArm.rotation.x = 0.55; // Slam down!
+
+            if (e.currentMove === 'slash') {
+              sfx.swing(0);
+              spawnSlashArc(e.x, 1.05, e.z, e.yaw, 2.5, 1, 0xf87171);
+              if (distToHero <= 3.05) {
+                damageHero(32, e, false);
+              }
+              e.aiState = 'recover';
+              e.aiTimer = 0.42;
+
+            } else if (e.currentMove === 'cleave') {
+              sfx.swing(2);
+              spawnSlashArc(e.x, 1.35, e.z, e.yaw, 4.1, 1, 0xef4444);
+              const hitCx = e.x + Math.sin(e.yaw) * 2.1;
+              const hitCz = e.z + Math.cos(e.yaw) * 2.1;
+              if (Math.hypot(hero.x - hitCx, hero.z - hitCz) <= 2.95 + hero.radius * 0.4) {
+                damageHero(58, e, false);
+              }
+              e.aiState = 'recover';
+              e.aiTimer = 0.62;
+
+            } else if (e.currentMove === 'earthshaker') {
+              sfx.earthshakerBoom();
+              cameraShake = Math.max(cameraShake, 0.58);
+              actionLight.color.setHex(0xef4444);
+              actionLight.intensity = 6.0;
+              actionLight.position.set(e.x, 2.0, e.z);
+              spawnGroundShockwave(e.x, e.z, 6.9, 0xef4444, 0.48);
+              spawnSparkBurst(e.x, 0.6, e.z, 0xf97316, 22, 11);
+
+              if (distToHero <= 6.85) {
+                damageHero(92, e, true); // Unblockable ground quake! Rewards backing out!
+              }
+              e.aiState = 'recover';
+              e.aiTimer = 0.95;
+
+            } else if (e.currentMove === 'leap') {
+              sfx.earthshakerBoom();
+              cameraShake = Math.max(cameraShake, 0.44);
+              spawnGroundShockwave(e.x, e.z, 3.8, 0xf97316, 0.38);
+              if (Math.hypot(hero.x - e.x, hero.z - e.z) <= 3.8) {
+                damageHero(64, e, false);
+              }
+              e.aiState = 'recover';
+              e.aiTimer = 0.78;
+
+            } else if (e.currentMove === 'summon') {
+              for (let s = 0; s < 2; s++) {
+                const ang = Math.random() * Math.PI * 2;
+                const r = 16.5;
+                const orc = createEnemy('orc', Math.cos(ang) * r, Math.sin(ang) * r);
+                spawnGroundShockwave(orc.x, orc.z, 2.2, 0x4ade80, 0.35);
+              }
+              e.aiState = 'recover';
+              e.aiTimer = 0.55;
+            }
+          }
+
+        } else if (e.aiState === 'recover') {
+          e.aiTimer -= dt;
+          e.model.rightArm.rotation.x = THREE.MathUtils.lerp(e.model.rightArm.rotation.x, -0.3, dt * 6);
+          if (e.aiTimer <= 0) {
+            e.aiState = 'chase';
+            e.currentMove = null;
+          }
+        }
+
+        if (e.aiState === 'chase') {
+          e.model.rightArm.rotation.x = THREE.MathUtils.lerp(e.model.rightArm.rotation.x, -0.25, dt * 8);
+          e.model.leftLeg.rotation.x = Math.sin(e.walkPhase) * 0.48;
+          e.model.rightLeg.rotation.x = -Math.sin(e.walkPhase) * 0.48;
+        } else {
+          e.model.leftLeg.rotation.x = 0;
+          e.model.rightLeg.rotation.x = 0;
+        }
+
+        resolveArenaAndObstacles(e);
+        e.model.root.position.set(e.x, 0, e.z);
+        e.model.root.rotation.y = e.yaw;
+      }
+
+      // Boss HUD Update
+      const bossHud = document.getElementById('boss-hud');
+      if (bossRef) {
+        bossHud.classList.remove('hidden');
+        document.getElementById('boss-hp-text').textContent = `${bossRef.hp} / ${bossRef.maxHp}`;
+        document.getElementById('boss-hp-fill').style.width = `${(bossRef.hp / bossRef.maxHp) * 100}%`;
+        document.getElementById('boss-posture-fill').style.width = `${(bossRef.posture / bossRef.maxPosture) * 100}%`;
+
+        const intentLabels = {
+          chase: '状态：巡猎逼近',
+          stunned: '★ 架势崩溃 · 眩晕破防中！',
+          recover: '状态：招式硬直（近身反击良机！）',
+          windup: bossRef.currentMove === 'earthshaker'
+            ? '⚠ 蓄力：毁灭裂地斩（不可格挡 · 快拉开距离投掷飞盾！）'
+            : bossRef.currentMove === 'leap'
+              ? '⚡ 蓄力：统领跳劈（注意闪避落点！）'
+              : bossRef.currentMove === 'summon'
+                ? '📯 战吼召唤半兽人增援！'
+                : '⚔ 蓄力：碎骨横扫（可举盾精准弹反！）'
+        };
+        document.getElementById('boss-intent').textContent = intentLabels[bossRef.aiState] || '';
+      } else {
+        bossHud.classList.add('hidden');
+      }
+    }
+
+    // =========================================================================
+    // 14. HUD, WORLD LABELS, TELEGRAPHS & CAMERA UPDATE
+    // =========================================================================
+    function updateHUDAndWorldLabels(dt) {
+      // Hero HP & Barrier
+      const hpPct = (hero.hp / hero.maxHp) * 100;
+      const barPct = Math.min(100, (hero.barrier / hero.maxHp) * 100);
+      document.getElementById('hero-hp-fill').style.width = `${hpPct}%`;
+      document.getElementById('hero-barrier-fill').style.width = `${barPct}%`;
+      document.getElementById('hp-text').textContent = hero.barrier > 0
+        ? `${hero.hp} / ${hero.maxHp} (+${hero.barrier} 护盾)`
+        : `${hero.hp} / ${hero.maxHp}`;
+
+      // Rage Bar & 3 Rage Points
+      const isMaxPoints = hero.ragePoints >= hero.maxRagePoints;
+      document.getElementById('rage-bar-fill').style.width = `${isMaxPoints ? 100 : hero.rageBar}%`;
+      document.getElementById('rage-pct-text').textContent = isMaxPoints
+        ? '怒气点已满 (3/3)'
+        : `${Math.floor(hero.rageBar)}%`;
+
+      for (let i = 1; i <= 3; i++) {
+        document.getElementById(`pip-${i}`).classList.toggle('active', hero.ragePoints >= i);
+        const card = document.getElementById(`skill-${i}`);
+        const usable = hero.ragePoints >= i && !(i <= 2 && hero.shieldOut);
+        card.classList.toggle('ready', usable);
+      }
+
+      // Alive Enemy Count
+      const aliveCount = enemies.filter((e) => e.aiState !== 'dead').length;
+      document.getElementById('enemy-counter').textContent = `存活敌军：${aliveCount}`;
+
+      // Banner Timer
+      if (bannerTimer > 0) {
+        bannerTimer -= dt;
+        if (bannerTimer <= 0) {
+          document.getElementById('center-banner').classList.remove('show');
+        }
+      }
+
+      // Project Enemy Overhead Plates
+      const proj = new THREE.Vector3();
+      for (const e of enemies) {
+        if (!e.plateEl || e.aiState === 'dead') continue;
+        e.plateFillEl.style.width = `${(e.hp / e.maxHp) * 100}%`;
+        proj.set(e.x, 2.35, e.z).project(camera);
+        if (proj.z > 1) {
+          e.plateEl.style.opacity = '0';
+        } else {
+          e.plateEl.style.opacity = '1';
+          const sx = (proj.x * 0.5 + 0.5) * window.innerWidth;
+          const sy = (-proj.y * 0.5 + 0.5) * window.innerHeight;
+          e.plateEl.style.left = `${sx}px`;
+          e.plateEl.style.top = `${sy}px`;
+        }
+      }
+
+      // Update Floating Damage / Status Numbers
+      for (let i = floatLabels.length - 1; i >= 0; i--) {
+        const fl = floatLabels[i];
+        fl.t += dt;
+        if (fl.t >= fl.dur) {
+          fl.el.remove();
+          floatLabels.splice(i, 1);
+          continue;
+        }
+        fl.vy -= 4.2 * dt;
+        fl.pos.x += fl.vx * dt;
+        fl.pos.y += fl.vy * dt;
+        proj.copy(fl.pos).project(camera);
+        const sx = (proj.x * 0.5 + 0.5) * window.innerWidth;
+        const sy = (-proj.y * 0.5 + 0.5) * window.innerHeight;
+        fl.el.style.left = `${sx}px`;
+        fl.el.style.top = `${sy}px`;
+        fl.el.style.opacity = `${1 - Math.pow(fl.t / fl.dur, 2)}`;
+      }
+    }
+
+    function updateVFXAndTelegraphs(dt, nowSec) {
+      // VFX list
+      for (let i = vfxList.length - 1; i >= 0; i--) {
+        const fx = vfxList[i];
+        fx.t += dt;
+        const p = Math.min(1, fx.t / fx.dur);
+        fx.update(dt, p);
+        if (fx.t >= fx.dur) {
+          fx.dispose();
+          vfxList.splice(i, 1);
+        }
+      }
+
+      // Ground Danger Telegraphs
+      for (let i = activeTelegraphs.length - 1; i >= 0; i--) {
+        const tg = activeTelegraphs[i];
+        if (tg.removed) {
+          activeTelegraphs.splice(i, 1);
+          continue;
+        }
+        tg.t += dt;
+        const p = Math.min(1, tg.t / tg.dur);
+        tg.fill.scale.setScalar(0.08 + p * 0.92);
+        if (tg.t >= tg.dur) {
+          tg.remove();
+          activeTelegraphs.splice(i, 1);
+        }
+      }
+
+      // Dynamic Action Light decay
+      if (actionLight.intensity > 0) {
+        actionLight.intensity = Math.max(0, actionLight.intensity - dt * 14);
+      }
+
+      // Forest Fireflies gentle drift
+      const posAttr = forestMotes.geometry.attributes.position;
+      for (let i = 0; i < moteCount; i++) {
+        posAttr.array[i * 3 + 1] += Math.sin(nowSec * 1.4 + i) * 0.004;
+      }
+      posAttr.needsUpdate = true;
+    }
+
+    function updateCamera(dt) {
+      // Smooth 3/4 Action Camera tracking Hero with slight look-ahead toward combat center
+      const desiredLook = new THREE.Vector3(hero.x * 0.88, 0.9, hero.z * 0.88);
+      camCurrentLook.lerp(desiredLook, Math.min(1, dt * 8));
+
+      const camPos = new THREE.Vector3(
+        camCurrentLook.x,
+        camCurrentLook.y + camZoom * 0.67,
+        camCurrentLook.z + camZoom * 0.89
+      );
+
+      if (cameraShake > 0.005) {
+        camPos.x += (Math.random() - 0.5) * cameraShake;
+        camPos.y += (Math.random() - 0.5) * cameraShake * 0.7;
+        cameraShake = Math.max(0, cameraShake - dt * 2.2);
+      }
+
+      camera.position.copy(camPos);
+      camera.lookAt(camCurrentLook);
+    }
+
+    // =========================================================================
+    // 15. MAIN ANIMATION LOOP
+    // =========================================================================
+    resetEncounter();
+
+    let lastTime = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const rawDt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+      const nowSec = now * 0.001;
+
+      updateAimRay();
+
+      // Hitstop pause for visceral heavy impact feel
+      if (hitstopTimer > 0) {
+        hitstopTimer -= rawDt;
+        updateCamera(rawDt * 0.25);
+        renderer.render(scene, camera);
+        return;
+      }
+
+      if (!fightEnded && hero.state !== 'dead') {
+        fightElapsed += rawDt;
+      }
+
+      updateHero(rawDt, nowSec);
+      updateFlyingShield(rawDt);
+      updateEnemies(rawDt);
+      updateVFXAndTelegraphs(rawDt, nowSec);
+      updateCamera(rawDt);
+      updateHUDAndWorldLabels(rawDt);
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
